@@ -1,0 +1,9 @@
+﻿# 스테이지 구성 — [작성 예정] 기획자가 채운다.
+# 한 줄이 스테이지 하나다. order가 작을수록 먼저 나온다.
+# t1_weak ~ t5_solid 열은 그 스테이지에 각 종류를 몇 채 둘 것인가다.
+#   종류의 뜻은 structures.csv 참조: t1 취약 → t5 견고 (숫자가 클수록 오래 두드려야 한다)
+# timeLimit: 제한 시간(초). 지금 단일 구역은 360.
+# quota:     이 스테이지를 클리어하는 데 필요한 잔해 단위.
+# 아래 첫 줄은 지금 구현된 단일 구역을 그대로 옮긴 것이다 — 기준점으로만 쓸 것.
+stageId,order,displayName,timeLimit,quota,t1_weak,t2_light,t3_normal,t4_heavy,t5_solid,note
+s01,1,,360,60,8,7,6,5,4,지금의 테스트 구역

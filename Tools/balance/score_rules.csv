@@ -1,0 +1,12 @@
+﻿# 점수 계산 규칙 — [작성 예정] 기획자가 채운다.
+# value 열만 채우면 된다. 비워 두면 그 항목은 점수에 넣지 않는다는 뜻이다.
+# 어떤 항목을 쓸지부터가 기획 결정이다 — 아래 목록은 [제안·미승인]이며 지우거나 추가해도 된다.
+key,value,note
+pointsPerDebrisUnit,,잔해 1단위를 구멍에 넣을 때마다
+pointsPerStructure,,건물 한 채를 완전히 부술 때마다
+pointsPerFloorCollapse,,층 하나가 내려앉을 때마다
+pointsPerSecondLeft,,제한 시간이 남은 채로 끝냈을 때 1초당
+quotaBonus,,할당량을 채웠을 때 1회
+overQuotaMultiplier,,할당량을 넘긴 잔해에 곱하는 배율
+holeLevelBonus,,끝났을 때 구멍 단계 1당
+noDropPenalty,,잔해를 내려놓고(Q) 버렸을 때 1단위당 감점
