@@ -66,16 +66,68 @@ namespace Demo.Destruction
                  "마지막 한 방이라 가장 길게 잡는다")]
         float brokenHitStop = 2.2f;
 
+        [SerializeField, Range(0f, 2f),
+         Tooltip("<b>보통 두드림</b>에서 멈추는 시간. GameConfig.hitStopSeconds에 곱한다.\n" +
+                 "여기는 반드시 짧아야 한다. 탭이 초당 5번이라 간격이 200ms인데, " +
+                 "층 붕괴와 같은 1(=80ms)을 걸면 <b>간격의 40%가 정지</b>라 " +
+                 "타격감이 아니라 렉으로 읽힌다.\n" +
+                 "0.5 = 40ms = 60fps에서 2.4프레임. 격투게임 약공격 히트스톱이 " +
+                 "보통 2~4프레임이다")]
+        float strikeHitStop = 0.5f;
+
+        [SerializeField, Range(0f, 0.3f),
+         Tooltip("타격 연출을 이만큼(초) <b>미룬다</b>. 주먹이 실제로 닿는 순간에 맞추기 위함이다.\n" +
+                 "DemolitionSession은 버튼을 누른 프레임에 부르는데, 주먹이 정점에 닿는 것은 " +
+                 "그보다 뒤다 — Punch 클립 0.458초 x 정점 0.36 / 상태 speed 3.08 = " +
+                 "<b>0.0535초</b> [실측 2026-09-30]. 60fps로 3.2프레임이라 눈에 띈다.\n" +
+                 "클립이나 상태 speed를 바꾸면 이 값도 다시 계산할 것.\n" +
+                 "게임 시간으로 센다 — 히트스톱이 걸리면 대기도 같이 멈춰야 " +
+                 "애니메이션과 어긋나지 않는다")]
+        float impactDelay = 0.0535f;
+
+        [SerializeField, Range(1f, 6f),
+         Tooltip("러쉬가 최대일 때 <b>마지막 한 방</b>의 정지를 몇 배로 키우는가 " +
+                 "[지시 2026-09-30, 오라 러쉬].\n" +
+                 "연타 중에는 '마지막 입력만' 규칙이 정지를 삼키고 마지막 탭에서만 터진다. " +
+                 "그 한 방이 단발과 같으면 러쉬가 조용히 끝나 버린다 — 러쉬는 예열이고 " +
+                 "마무리가 타격이다.\n" +
+                 "3이면 0.5 x 3 x 0.08 = 120ms. 층 붕괴(80ms)보다 크고 완파(176ms)보다 작다. " +
+                 "[제안·미승인]")]
+        float rushFinishHitStop = 3f;
+
+        [SerializeField, Range(0.1f, 1f),
+         Tooltip("Rush01이 이 값을 넘는 동안에는 <b>정지를 걸지 않는다</b>. 흔들기만 남는다.\n" +
+                 "러쉬 중에 멈추면 애니메이션도 같이 멈춰서 다음 주먹이 못 나간다 — " +
+                 "실측으로 8연타 중 정점에 닿은 것이 2번뿐이었다. 오라 러쉬는 " +
+                 "<b>안 멈추는 구간</b>이 있어야 잔상이 된다. [제안·미승인]")]
+        float rushSuppressAbove = 0.5f;
+
+        [SerializeField, Range(0f, 0.6f),
+         Tooltip("러쉬가 끝날 때의 셰이크 세기(m). <b>층 붕괴(0.30)를 쓰면 안 된다</b> — " +
+                 "콤보 마무리에 '한 층이 통째로 무너졌다' 세기를 쓰는 꼴이라 " +
+                 "일반 타격(0.035~0.09)의 8배까지 튄다 [지적 2026-09-30].\n" +
+                 "0.15면 한 방 최대치의 약 1.7배다. [제안·미승인]")]
+        float rushFinishShake = 0.15f;
+
+        [SerializeField, Range(0.05f, 1f), Tooltip("러쉬 마무리 셰이크가 잦아드는 시간(초)")]
+        float rushFinishShakeSeconds = 0.25f;
+
         Core.FollowCamera cam;
         Player.PlayerAnimator robot;
-        Coroutine freeze;
-        float restoreScale = 1f;      // 히트스톱이 끝나면 되돌릴 배율
-        bool frozen;
+        HitStop stop;             // 시간을 멈추는 일은 이쪽이 전담한다
+        Coroutine pendingImpact;  // 대기 중인 타격은 하나뿐이다 — 새 입력이 이긴다
+        float rushPeak;           // 이번 러쉬에서 도달한 최대치
+        bool rushArmed;           // 마무리를 쏠 준비가 됐는가
 
         void Awake()
         {
             cam = FindFirstObjectByType<Core.FollowCamera>();
             robot = FindFirstObjectByType<Player.PlayerAnimator>();
+
+            // DemolitionSession이 이 컴포넌트를 런타임에 붙이므로, 짝도 여기서 챙긴다.
+            // Awake에서의 AddComponent는 규칙 5(Update 금지)에 걸리지 않는다.
+            stop = GetComponent<HitStop>();
+            if (stop == null) stop = gameObject.AddComponent<HitStop>();
         }
 
         /// <summary>파괴가 진행되는 동안 매 프레임. 지금은 쓰지 않는다 — 연출은 전부 사건 단위다.</summary>
@@ -105,8 +157,8 @@ namespace Demo.Destruction
 
         public void OnStrike(float progress01, Vector3 point)
         {
-            Shake(Mathf.Lerp(strikeShake, strikeShakeMax, Mathf.Clamp01(progress01)),
-                  strikeShakeSeconds);
+            Impact(Mathf.Lerp(strikeShake, strikeShakeMax, Mathf.Clamp01(progress01)),
+                   strikeShakeSeconds, strikeHitStop);
         }
 
         /// <summary>
@@ -115,15 +167,96 @@ namespace Demo.Destruction
         /// </summary>
         public void OnFloorCollapse(Vector3 point)
         {
-            Shake(collapseShake, collapseShakeSeconds);
-            HitStop(collapseHitStop);
+            Impact(collapseShake, collapseShakeSeconds, collapseHitStop);
         }
 
         /// <summary>대상이 완전히 부서진 순간.</summary>
         public void OnBroken(Vector3 point)
         {
-            Shake(brokenShake, brokenShakeSeconds);
-            HitStop(brokenHitStop);
+            Impact(brokenShake, brokenShakeSeconds, brokenHitStop);
+        }
+
+        /// <summary>
+        /// 타격 한 박자. <b>주먹이 닿는 순간까지 미뤘다가</b> 흔들고 멈춘다.
+        ///
+        /// 미루는 이유는 <see cref="impactDelay"/>에 적어 뒀다 — 연출이 주먹보다
+        /// 75ms 먼저 터지고 있었다. 흔들림을 키우거나 히트스톱을 얹기 전에
+        /// 이것부터 맞춰야 한다. 어긋난 자리에 크게 얹으면 더 어색해질 뿐이다.
+        ///
+        /// <b>대기 중인 타격은 하나뿐이다</b> [지시 2026-09-30]. 손이 떨어지기 전에
+        /// 다음 펀치가 나오면 앞의 것은 버리고 <b>마지막 입력</b>만 남긴다.
+        ///
+        /// tapsPerSecond(5)는 게이지 계산에만 쓰이지 입력을 막지 않는다. 연타하면
+        /// 프레임마다도 들어오는데, 탭마다 띄우면 정지 구간이 겹겹이 쌓여 화면이
+        /// 계속 끊긴다 — 한 번이 33.5ms인데 60ms 간격이면 절반 이상이 정지다.
+        ///
+        /// 버려진 탭도 <b>게이지는 이미 올렸다</b>. 여기서 버리는 것은 연출뿐이라
+        /// 진행이 손해 보지 않는다. 팔의 회수는 애니메이터가 맡는다 —
+        /// Punch -> Punch 전이가 0.040초 고정이라 새 입력이 뻗은 팔을 곧장 당긴다.
+        /// </summary>
+        void Impact(float magnitude, float shakeSeconds, float hitStopScale)
+        {
+            if (impactDelay <= 0f || !isActiveAndEnabled)
+            {
+                Shake(magnitude, shakeSeconds);
+                if (stop != null) stop.Hold(hitStopScale);
+                return;
+            }
+            if (pendingImpact != null) StopCoroutine(pendingImpact);
+            pendingImpact = StartCoroutine(ImpactAfter(magnitude, shakeSeconds, hitStopScale));
+        }
+
+        IEnumerator ImpactAfter(float magnitude, float shakeSeconds, float hitStopScale)
+        {
+            // <b>러쉬면 그만큼 앞당긴다.</b> 펀치가 2.5배로 돌면 주먹도 2.5배 빨리
+            // 도착하므로, 75ms를 그대로 두면 이미 지나간 자리에 터진다.
+            float scale = robot != null ? Mathf.Max(0.1f, robot.PunchSpeedScale) : 1f;
+
+            // <b>게임 시간</b>으로 기다린다. 히트스톱이 걸린 동안에는 애니메이션도
+            // 멈추므로, 대기가 같이 멈춰야 주먹과 박자가 안 어긋난다.
+            yield return new WaitForSeconds(impactDelay / scale);
+            pendingImpact = null;
+
+            // 흔들기는 <b>러쉬 중에도 매 타격</b> 울린다 — 그게 연속 타격으로 읽힌다.
+            // 정지만 뺀다. 멈추면 애니메이션도 멈춰서 다음 주먹이 못 나가기 때문이다.
+            Shake(magnitude, shakeSeconds);
+            float rush = robot != null ? robot.Rush01 : 0f;
+            if (rush <= rushSuppressAbove && stop != null) stop.Hold(hitStopScale);
+        }
+
+        /// <summary>
+        /// <b>러쉬가 끝나는 순간을 잡는다</b> [지시 2026-09-30, 오라 러쉬].
+        ///
+        /// 러쉬는 예열이고 마무리가 타격이다. 연타하는 동안에는 정지를 빼 두었으므로
+        /// (<see cref="rushSuppressAbove"/>) 여기서 한 번 크게 갚는다.
+        ///
+        /// 취소 규칙에 맡기지 않고 따로 잡는 이유: 러쉬에서는 지연이 30ms까지 줄어
+        /// 탭 간격(60ms)보다 짧아지므로, 각 타격이 다음 탭 전에 이미 터져 버린다.
+        /// 취소는 <b>대기 중인 것</b>만 막는다.
+        /// </summary>
+        void Update()
+        {
+            if (robot == null) return;
+            float r = robot.Rush01;
+
+            if (r > rushSuppressAbove)
+            {
+                rushPeak = Mathf.Max(rushPeak, r);
+                rushArmed = true;
+                return;
+            }
+            if (!rushArmed) return;
+
+            rushArmed = false;
+            float peak = rushPeak;
+            rushPeak = 0f;
+
+            // <b>마무리는 따로 지른다.</b> 타이머로 잡은 이 순간에는 마지막 연타의 팔이
+            // 이미 내려와 있다 (실측 정점의 20%). 한 방을 정상 속도로 더 내고
+            // 그 정점에서 멈추면 팔이 끝까지 뻗은 그림이 나온다.
+            if (robot != null) robot.PunchFinisher();
+            Impact(rushFinishShake, rushFinishShakeSeconds,
+                   strikeHitStop * rushFinishHitStop * peak);
         }
 
         void Shake(float magnitude, float seconds)
@@ -132,57 +265,13 @@ namespace Demo.Destruction
             if (cam != null) cam.Shake(magnitude, seconds);
         }
 
-        /// <summary>
-        /// 화면을 아주 잠깐 멈춘다. 때린 것이 <b>단단했다</b>는 신호다 —
-        /// 부드럽게 이어지면 손이 허공을 지난 것처럼 느껴진다.
-        /// </summary>
-        void HitStop(float scale)
-        {
-            GameConfig cfg = Core.GameConfigRef.Current;
-            float seconds = (cfg != null ? cfg.hitStopSeconds : 0f) * scale;
-            if (seconds <= 0f || !isActiveAndEnabled) return;
-
-            // 되돌릴 배율은 <b>멈추기 전에</b> 기억한다.
-            //
-            // 코루틴 안에서 읽으면 겹칠 때 터진다 — 두 번째 히트스톱이 첫 코루틴을 끊는
-            // 시점에는 이미 배율이 0이라, 그걸 "되돌릴 값"으로 삼으면 게임이 영영 멈춘다.
-            // 이미 멈춰 있는 동안 들어온 호출은 <b>시간만 늘린다</b>.
-            if (!frozen)
-            {
-                if (Time.timeScale <= 0f) return;   // 남이 멈춰 둔 것이다 — 건드리지 않는다
-                restoreScale = Time.timeScale;
-                frozen = true;
-            }
-
-            if (freeze != null) StopCoroutine(freeze);
-            freeze = StartCoroutine(Freeze(seconds));
-        }
-
-        /// <summary>
-        /// 대기는 반드시 <b>실제 시간</b>으로 잰다. 배율이 0인 동안에는 게임 시간이
-        /// 한 톨도 안 흐르므로, 보통 대기를 쓰면 영원히 안 깨어난다.
-        /// </summary>
-        IEnumerator Freeze(float seconds)
-        {
-            Time.timeScale = 0f;
-            yield return new WaitForSecondsRealtime(seconds);
-            Restore();
-        }
-
-        void Restore()
-        {
-            if (!frozen) return;
-            Time.timeScale = restoreScale;
-            frozen = false;
-            freeze = null;
-        }
-
-        /// <summary>연출 도중에 꺼져도 시간이 멈춘 채로 남지 않게 한다.</summary>
+        /// <summary>연출 도중에 꺼져도 대기 중인 타격이 남지 않게 한다.</summary>
         void OnDisable()
         {
-            if (freeze != null) StopCoroutine(freeze);
-            freeze = null;
-            Restore();
+            if (pendingImpact != null) StopCoroutine(pendingImpact);
+            pendingImpact = null;
+            rushArmed = false;
+            rushPeak = 0f;
         }
     }
 }

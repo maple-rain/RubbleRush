@@ -239,6 +239,14 @@ namespace Demo.Core
                 return;
             }
 
+            // <b>히트스톱 중에는 한 장면을 붙든다</b> [지시 2026-09-30].
+            //
+            // 아래 감쇠가 Time.deltaTime을 쓰므로 timeScale이 0이면 세기가 안 줄어든다.
+            // 그런데 방향은 매 프레임 다시 뽑히니, 세상이 멈춘 채 카메라만 최대 세기로
+            // 요동친다 — 실측으로 정지 113ms 동안 변위가 프레임마다 0.068m씩 바뀌었다.
+            // 정지가 주는 "박혔다"가 그 난동에 다 지워진다.
+            if (Time.timeScale <= 0f) return;
+
             shakeOffset = Random.insideUnitSphere * shakeMagnitude;
             shakeOffset.y *= 0.5f;   // 세로로 덜 흔든다. 수직 흔들림이 더 빨리 멀미가 난다
 
