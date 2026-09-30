@@ -113,8 +113,16 @@ namespace Demo.Data
         public float cameraZoomMax;
 
         [Header("성능 예산 — CLAUDE.md 표에서 온 값. 기획 수치가 아니다")]
-        [Tooltip("동시 잔해 상한. 초과분은 오래된 것부터 페이드아웃")]
-        public int debrisMaxActive = 80;
+        [Tooltip("동시 잔해 상한. 초과분은 오래된 것부터 페이드아웃. "
+                 + "<b>80은 실측 없이 CLAUDE.md 표에서 옮겨 온 자리표시자였다.</b> "
+                 + "그 표도 'D2에 실측하기 전까지의 작업 기준값'이라고 적고 있고 D2는 안 했다. "
+                 + "구역 전체(30채)를 다 부수면 잔해가 344개 나온다 — 80이면 264개(77%)가 "
+                 + "잘려서, 다 부숴도 플레이어는 자기가 한 일의 1/4만 본다 [지적 2026-09-30]. "
+                 + "실측: 잔해 한 개는 삼각형 12개짜리 큐브라 344개를 다 띄워도 삼각형 "
+                 + "예산의 2.8%다. 드는 것은 드로우콜 하나씩뿐이고, 데스크톱에서는 400개에서도 "
+                 + "160fps가 나왔다. 500은 344에 여유를 둔 값이다 [지시 2026-09-30]. "
+                 + "저사양 폰에서 드로우콜을 감당하는지는 DebrisBenchmark(F9)로 확인할 것")]
+        public int debrisMaxActive = 500;
 
         [Tooltip("동시 구조물 상한. ZoneBuilder가 넘기면 경고한다")]
         public int structureMaxActive = 60;
