@@ -1,0 +1,28 @@
+﻿# 펀치 타이밍. value만 고치고 'Demo/11b. 펀치 타이밍 CSV 불러오기'를 실행한다.
+# 값이 세 군데(컨트롤러·PlayerAnimator·DestructionFX)에 흩어져 있어 여기로 모았다.
+#
+# 지금 기준:  한 방 149ms   정점 도달 54ms   러쉬 한 방 59ms
+# 탭 간격은 GameConfig.tapsPerSecond가 정한다 (초당 5탭이면 200ms).
+# 러쉬 한 방이 탭 간격보다 길면 주먹이 벽에 닿기 전에 회수된다.
+#
+key,value,설명
+clip.speed,3.08,펀치 클립 재생 배속. 한 방 = 0.458초 / 이 값
+clip.transition,0.015,펀치끼리 전이 시간(초). 길면 연타가 계속 섞여 팔이 안 뻗는다
+peak.at,0.36,주먹이 최대로 뻗는 재생 진행도(0~1). 실측 0.36
+peak.width,0.1,정점으로 치는 구간의 폭(진행도)
+peak.slowRate,0.12,정점에서 늦추는 배율. 작을수록 오래 버틴다
+rush.fastGap,0.1,탭 간격이 이보다 짧으면 러쉬 최대(초)
+rush.slowGap,0.3,탭 간격이 이보다 길면 러쉬 아님(초)
+rush.rate,2.5,러쉬 배속. 한 방이 탭 간격 안에 끝나야 주먹이 벽까지 간다
+rush.fade,2.5,안 때리면 러쉬가 빠지는 속도(초당)
+stop.strike,0.5,보통 두드림 정지 배수 (x GameConfig.hitStopSeconds)
+stop.collapse,1,층 붕괴 정지 배수
+stop.broken,2.2,완파 정지 배수
+stop.rushFinish,3,러쉬 마무리 정지 배수
+stop.rushSuppressAbove,0.5,러쉬가 이 값을 넘으면 정지를 걸지 않는다
+stop.peakTimeout,0.3,정점을 이만큼(초) 기다리다 못 만나면 그냥 쏜다
+shake.strike,0.035,두드림 셰이크 세기(m)
+shake.strikeMax,0.09,진행도가 오를수록 커지는 상한(m)
+shake.collapse,0.3,층 붕괴 셰이크(m)
+shake.broken,0.55,완파 셰이크(m)
+shake.rushFinish,0.15,러쉬 마무리 셰이크(m). 층 붕괴급을 쓰면 너무 심하다

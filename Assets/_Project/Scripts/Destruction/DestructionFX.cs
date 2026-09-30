@@ -75,15 +75,14 @@ namespace Demo.Destruction
                  "보통 2~4프레임이다")]
         float strikeHitStop = 0.5f;
 
-        [SerializeField, Range(0f, 0.3f),
-         Tooltip("타격 연출을 이만큼(초) <b>미룬다</b>. 주먹이 실제로 닿는 순간에 맞추기 위함이다.\n" +
-                 "DemolitionSession은 버튼을 누른 프레임에 부르는데, 주먹이 정점에 닿는 것은 " +
-                 "그보다 뒤다 — Punch 클립 0.458초 x 정점 0.36 / 상태 speed 3.08 = " +
-                 "<b>0.0535초</b> [실측 2026-09-30]. 60fps로 3.2프레임이라 눈에 띈다.\n" +
-                 "클립이나 상태 speed를 바꾸면 이 값도 다시 계산할 것.\n" +
-                 "게임 시간으로 센다 — 히트스톱이 걸리면 대기도 같이 멈춰야 " +
-                 "애니메이션과 어긋나지 않는다")]
-        float impactDelay = 0.0535f;
+        [SerializeField, Range(0.05f, 0.6f),
+         Tooltip("연출이 <b>주먹이 다음 정점에 닿기를</b> 이만큼(초)까지 기다린다.\n" +
+                 "고정 지연으로 쏘면 프레임 지터에 걸려 팔이 안 펴진 채 멈춘다 — " +
+                 "실측으로 같은 코드가 97%와 21%로 갈렸고, 층 붕괴는 32%에서 터졌다 " +
+                 "[2026-09-30]. 그래서 보고 쏜다.\n" +
+                 "이 시간을 넘기면 그냥 쏜다 — 어떤 이유로든 정점이 안 오면 " +
+                 "연출이 통째로 빠지는 것보다 늦게라도 나오는 편이 낫다")]
+        float peakTimeout = 0.30f;
 
         [SerializeField, Range(1f, 6f),
          Tooltip("러쉬가 최대일 때 <b>마지막 한 방</b>의 정지를 몇 배로 키우는가 " +
@@ -179,9 +178,9 @@ namespace Demo.Destruction
         /// <summary>
         /// 타격 한 박자. <b>주먹이 닿는 순간까지 미뤘다가</b> 흔들고 멈춘다.
         ///
-        /// 미루는 이유는 <see cref="impactDelay"/>에 적어 뒀다 — 연출이 주먹보다
-        /// 75ms 먼저 터지고 있었다. 흔들림을 키우거나 히트스톱을 얹기 전에
-        /// 이것부터 맞춰야 한다. 어긋난 자리에 크게 얹으면 더 어색해질 뿐이다.
+        /// 기다리는 이유는 <see cref="peakTimeout"/>에 적어 뒀다 — 연출이 주먹보다
+        /// 먼저 터지고 있었다. 흔들림을 키우거나 히트스톱을 얹기 전에 이것부터
+        /// 맞춰야 한다. 어긋난 자리에 크게 얹으면 더 어색해질 뿐이다.
         ///
         /// <b>대기 중인 타격은 하나뿐이다</b> [지시 2026-09-30]. 손이 떨어지기 전에
         /// 다음 펀치가 나오면 앞의 것은 버리고 <b>마지막 입력</b>만 남긴다.
@@ -196,7 +195,7 @@ namespace Demo.Destruction
         /// </summary>
         void Impact(float magnitude, float shakeSeconds, float hitStopScale)
         {
-            if (impactDelay <= 0f || !isActiveAndEnabled)
+            if (!isActiveAndEnabled)
             {
                 Shake(magnitude, shakeSeconds);
                 if (stop != null) stop.Hold(hitStopScale);
@@ -206,15 +205,21 @@ namespace Demo.Destruction
             pendingImpact = StartCoroutine(ImpactAfter(magnitude, shakeSeconds, hitStopScale));
         }
 
+        /// <summary>
+        /// <b>주먹이 다음 정점에 닿을 때</b> 흔들고 멈춘다.
+        ///
+        /// 정점 <b>횟수</b>가 늘기를 기다리는 것이 핵심이다. 지금 정점인지만 보면,
+        /// 새 탭이 들어왔을 때 이전 펀치가 아직 정점 구간에 있어 즉시 터진다 —
+        /// 새 주먹이 아니라 옛 주먹을 보고 쏘는 꼴이 된다.
+        /// </summary>
         IEnumerator ImpactAfter(float magnitude, float shakeSeconds, float hitStopScale)
         {
-            // <b>러쉬면 그만큼 앞당긴다.</b> 펀치가 2.5배로 돌면 주먹도 2.5배 빨리
-            // 도착하므로, 75ms를 그대로 두면 이미 지나간 자리에 터진다.
-            float scale = robot != null ? Mathf.Max(0.1f, robot.PunchSpeedScale) : 1f;
+            int seen = robot != null ? robot.StrikePeakCount : 0;
+            float deadline = Time.unscaledTime + peakTimeout;
+            while (Time.unscaledTime < deadline
+                   && robot != null && robot.StrikePeakCount == seen)
+                yield return null;
 
-            // <b>게임 시간</b>으로 기다린다. 히트스톱이 걸린 동안에는 애니메이션도
-            // 멈추므로, 대기가 같이 멈춰야 주먹과 박자가 안 어긋난다.
-            yield return new WaitForSeconds(impactDelay / scale);
             pendingImpact = null;
 
             // 흔들기는 <b>러쉬 중에도 매 타격</b> 울린다 — 그게 연속 타격으로 읽힌다.

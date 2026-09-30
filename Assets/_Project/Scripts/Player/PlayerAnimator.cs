@@ -83,25 +83,8 @@ namespace Demo.Player
         float holdRate = 0.12f;
 
         [Header("타격 — 러쉬 [지시 2026-09-30, 오라 러쉬]")]
-        [SerializeField, Range(0.03f, 0.3f),
-         Tooltip("탭 간격이 이보다 짧으면 러쉬가 최대다(초). [제안·미승인]")]
-        float rushFastGap = 0.10f;
-
-        [SerializeField, Range(0.1f, 1f),
-         Tooltip("탭 간격이 이보다 길면 러쉬가 아니다(초). 그 사이는 비례해서 섞인다. [제안·미승인]")]
-        float rushSlowGap = 0.30f;
-
-        [SerializeField, Range(1f, 6f),
-         Tooltip("러쉬가 최대일 때의 재생 배율.\n" +
-                 "<b>이게 러쉬의 핵심이다.</b> 클립 0.458초 / 상태 speed 2.2 = 한 방 208ms인데, " +
-                 "60ms 간격으로 치면 정규시간 0.288까지밖에 못 가고 다시 시작한다. " +
-                 "정점이 0.36이므로 <b>주먹이 벽에 닿기 전에 회수된다</b> — 연타할수록 헛친다.\n" +
-                 "2.5면 한 방이 83ms라 제때 도착한다. [제안·미승인]")]
-        float rushPunchRate = 2.5f;
-
-        [SerializeField, Range(0.5f, 10f),
-         Tooltip("안 때리면 러쉬가 빠지는 속도(초당). 2.5면 0.4초에 0으로. [제안·미승인]")]
-        float rushFade = 2.5f;
+        [SerializeField, Tooltip("연타 감지와 배속. 자세한 설명은 PunchRush.cs에 있다")]
+        PunchRush rush = new PunchRush();
 
         static readonly int SpeedId = Animator.StringToHash("Speed");
         static readonly int PunchId = Animator.StringToHash("Punch");
@@ -114,19 +97,41 @@ namespace Demo.Player
         int twistLayer = -1;
         float blend;
         float walkRate = 1f;
-        float rush01;              // 0 = 단발, 1 = 러쉬
-        float lastPunchAt = -99f;
         bool lastRight;            // 마지막에 어느 팔로 쳤나. 마무리가 반대팔로 나가게 한다
+        int peakCount;             // 주먹이 정점에 닿은 횟수. 연출이 '다음 정점'을 기다리는 데 쓴다
+        bool wasAtPeak;
 
         /// <summary>지금 연타 중인가. 0이면 단발, 1이면 러쉬. 연출이 읽는다.</summary>
-        public float Rush01 => rush01;
+        public float Rush01 => rush.Level01;
 
         /// <summary>
-        /// 지금 펀치가 <b>몇 배로</b> 돌고 있는가. 연출이 타격 시점을 앞당기는 데 쓴다 —
-        /// 배속이 2.5면 주먹도 2.5배 빨리 도착하므로, 연출을 그대로 두면 이미 지나간
-        /// 자리에 터진다.
+        /// 주먹이 정점에 닿은 <b>횟수</b>. 연출은 이 수가 늘기를 기다린다.
+        ///
+        /// <b>고정 지연으로는 안 된다.</b> 방아쇠 소비(최대 1프레임)와 전이(0.015초)의
+        /// 지터가 정점까지의 53ms와 같은 자릿수라, 같은 코드로 재도 뻗음이 97%와 21%로
+        /// 갈렸고 층 붕괴는 32%에서 터졌다 [실측 2026-09-30].
+        ///
+        /// <b>"지금 정점인가"로도 안 된다.</b> 새 탭이 들어왔을 때 이전 펀치가 아직 정점
+        /// 구간에 있으면 즉시 참이라, 새 주먹이 아니라 옛 주먹을 보고 쏘게 된다.
+        /// 횟수를 세면 언제나 <b>다음</b> 정점이다.
         /// </summary>
-        public float PunchSpeedScale => Mathf.Lerp(1f, rushPunchRate, rush01);
+        public int StrikePeakCount => peakCount;
+
+        bool AtStrikePeak
+        {
+            get
+            {
+                if (anim == null || upperLayer < 0) return false;
+                if (anim.IsInTransition(upperLayer)) return false;
+                AnimatorStateInfo cur = anim.GetCurrentAnimatorStateInfo(upperLayer);
+                if (!cur.IsName("Punch") && !cur.IsName("PunchRight")) return false;
+                float t = cur.normalizedTime - Mathf.Floor(cur.normalizedTime);
+                return t >= holdAt && t < holdAt + holdWidth;
+            }
+        }
+
+        /// <summary>지금 펀치가 몇 배로 돌고 있는가. 연출이 타격 시점을 앞당기는 데 쓴다.</summary>
+        public float PunchSpeedScale => rush.SpeedScale;
         float twistWeight;
 
         /// <summary>지금 걷기/달리기 클립이 몇 배속으로 돌고 있는가. 1이면 원속도.</summary>
@@ -208,12 +213,18 @@ namespace Demo.Player
             // 감속은 단발에서 한 방을 읽게 하는 장치인데, 연타에서는 그것이
             // 헛치는 원인이 된다 — 늦어진 주먹 위로 다음 입력이 들어와 회수되기 때문이다.
             // 러쉬에서 필요한 것은 "더 세게"가 아니라 <b>제때 도착</b>이다.
-            rush01 = Mathf.MoveTowards(rush01, 0f, rushFade * Time.unscaledDeltaTime);
+            rush.Decay();
+
+            // 정점 진입을 센다. 여기서 세는 이유는 DriveTwist가 매 프레임 한 번만
+            // 불리기 때문이다 — 프로퍼티 안에서 세면 읽는 쪽 수만큼 중복으로 센다.
+            bool nowPeak = AtStrikePeak;
+            if (nowPeak && !wasAtPeak) peakCount++;
+            wasAtPeak = nowPeak;
 
             float t = cur.normalizedTime - Mathf.Floor(cur.normalizedTime);
             bool inHold = punching && !anim.IsInTransition(upperLayer)
                           && t >= holdAt && t < holdAt + holdWidth
-                          && rush01 < 0.5f;
+                          && rush.Level01 < 0.5f;
             anim.SetFloat(PunchRateId, inHold ? holdRate : PunchSpeedScale);
         }
 
@@ -234,7 +245,7 @@ namespace Demo.Player
         public void PunchFinisher()
         {
             if (anim == null) return;
-            rush01 = 0f;                 // 정상 속도로 — 러쉬 배속이면 정점을 지나쳐 버린다
+            rush.Clear();                // 정상 속도로 — 러쉬 배속이면 정점을 지나쳐 버린다
             lastRight = !lastRight;
             anim.SetBool(RightArmId, lastRight);
             anim.SetTrigger(PunchId);
@@ -253,10 +264,7 @@ namespace Demo.Player
             // <b>실제 시간</b>으로 잰다. 히트스톱이 걸린 동안 게임 시간은 안 흐르는데
             // 플레이어의 손은 계속 움직이므로, 게임 시간으로 재면 간격이 0으로 보인다.
             lastRight = rightArm;
-            float gap = Time.unscaledTime - lastPunchAt;
-            lastPunchAt = Time.unscaledTime;
-            float want = Mathf.InverseLerp(rushSlowGap, rushFastGap, gap);
-            rush01 = Mathf.Max(rush01, want);   // 오를 때는 즉시, 내릴 때만 천천히
+            rush.Note();
         }
 
         void Update()
