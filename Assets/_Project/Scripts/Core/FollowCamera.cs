@@ -51,6 +51,15 @@ namespace Demo.Core
         [SerializeField, Tooltip("아무리 작은 대상이어도 이보다 가까이 가지 않는다(m)")]
         float minStandoff = 1.0f;
 
+        [SerializeField, Tooltip("아무리 큰 대상이어도 이보다 멀리 물러나지 않는다(m). 면에서 잰 거리다. " +
+                                 "<b>주먹 때문에 있다.</b> 위 계산은 층 높이에 비례해 늘어나는데, 주먹은 " +
+                                 "StrikeArmRig의 fistDistance로 카메라에서 <b>고정 거리</b>에 매달려 있다. " +
+                                 "그래서 층을 높이면 카메라만 물러나고 주먹과 벽 사이가 그만큼 벌어진다. " +
+                                 "여기서 끊으면 층이 높아져도 주먹은 벽에서 멀어지지 않는다 " +
+                                 "[지시 2026-09-30]. 층 띠가 프레임을 넘치면 그만큼 잘린다 — " +
+                                 "층 집중 연출에서는 의도된 그림이다")]
+        float maxStandoff = 1.95f;
+
         [SerializeField, Tooltip("대상 크기 대비 여유. 1이면 화면에 꽉 차고, 클수록 여백이 생긴다")]
         float framingMargin = 1.25f;
 
@@ -178,7 +187,12 @@ namespace Demo.Core
                 // 조각 판은 건물 <b>면</b>에 서는데 대상의 Transform은 <b>중심</b>에 있다.
                 // 중심 기준으로만 물러나면 실제 판까지의 거리가 그 절반 두께만큼 짧아진다.
                 // 옆면을 부술 때는 더할 값이 z가 아니라 x의 절반이다 — 그래서 면을 물어본다.
-                float standoff = Mathf.Max(minStandoff, Mathf.Max(needH, needW) * margin)
+                //
+                // <b>위로도 막는다</b> [지시 2026-09-30]. 위 계산은 층 높이에 선형으로
+                // 비례하므로 건물을 높이면 카메라가 같이 물러난다. 그런데 주먹은
+                // 카메라에서 고정 거리에 있어서, 층을 높일수록 주먹과 벽 사이만 벌어졌다.
+                float standoff = Mathf.Clamp(Mathf.Max(needH, needW) * margin,
+                                             minStandoff, Mathf.Max(minStandoff, maxStandoff))
                                  + Destruction.StructureFace.Offset(size, face);
 
                 Vector3 eyeAim = wall + Vector3.up * aimY;

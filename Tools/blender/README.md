@@ -62,3 +62,44 @@ Blender MCP 연결은 이미 있다 (`blender-mcp` 서버, 포트 9876). 필요�
 
 > 이 폴더를 비워 둔 것은 **판단이지 누락이 아니다.** 되살릴 조건은 위에 적어 뒀다.
 > 판단이 틀렸다고 보면 §5대로 네 개를 만들면 된다.
+
+---
+
+## 2026-09-30 — 부활 조건 하나가 걸렸다
+
+> **한 종류의 여러 판본을 따로 굽어야 할 때** — 위에 적어 둔 조건에 해당한다.
+
+파괴 화면은 1인칭이라 팔만 보여야 한다 [지시 2026-09-30]. 몸통과 머리를 카메라 뒤로
+밀어내던 방식(`StrikeArmRig.headClearance`)은 **주먹 거리의 상한**을 만들어서,
+주먹이 화면 폭의 25%를 덮는 것을 고칠 수 없었다. 아예 안 그리면 그 상한이 사라진다.
+실측: 화면 폭 24.6% -> **17.9%**.
+
+| 스크립트 | 역할 |
+|---|---|
+| `glb2fbx.py` | VARCO GLB -> Unity FBX. VARCO의 FBX가 애니메이션을 빠뜨려서 필요하다 |
+| `arms_carve.py` | `Base.glb`에서 팔만 남긴 `R_Arms.fbx`를 굽는다 |
+
+```bash
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b -noaudio -P Tools/blender/arms_carve.py -- Tools/blender/glb <출력폴더>
+```
+
+### 뼈는 23개를 그대로 둔다
+
+`AC_Demolition.controller`, 아바타, 마스크 3종(`UpperBody`/`LowerBody`/`StrikeTwist`),
+클립이 전부 뼈를 **경로 이름**으로 부른다. 뼈를 줄이면 그 전부가 깨진다.
+지우는 것은 정점뿐이다 — 8268 -> 4054 (팔 뼈 가중치 합 0.5 이상만 남김).
+
+이 로봇은 데포르메라 **주먹만 정점의 24.2%**다 (왼 1082 + 오른 918). 머리 14.6%,
+몸통은 2.9%뿐이다. 팔이 절반이나 남는 것이 정상이다.
+
+### 왜 애니메이터를 두 벌 만들지 않는가
+
+같은 GLB를 같은 설정으로 다시 구웠으므로 bindpose가 원본과 **완전히 같다**
+(실측 최대 차이 0.00000000). `SkinnedMeshRenderer`는 `bones[]`를 씬의 리그에서 가져오고
+메시에서는 `bindposes`만 읽으므로, `StrikeArmRig`가 `sharedMesh` 한 줄만 바꿔 끼운다.
+같은 애니메이터·같은 클립이 그대로 돌아 동기화 문제가 원천적으로 없다.
+
+### 원본 GLB는 저장소에 없다
+
+`Tools/blender/glb/` (59MB)는 `.gitignore`에 있다. **지우면 안 된다** — VARCO 크레딧으로
+만든 것이라 다시 만들 수 없고, 팔 FBX를 다시 구우려면 `Base.glb`가 필요하다.
