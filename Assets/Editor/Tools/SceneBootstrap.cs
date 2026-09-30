@@ -39,47 +39,8 @@ namespace Demo.EditorTools
         [MenuItem("Demo/2b. Main 씬 다시 짓기 (확인 없음)", priority = 21)]
         public static void RebuildSceneNoPrompt() => BuildScene(false);
 
-        /// <summary>
-        /// 이 도구가 <b>다시 만들지 못하는</b> 것이 지금 씬에 있는가.
-        ///
-        /// BuildPlayer는 원시 큐브 로봇을 만든다 — 주석에 "스켈레탈 애니메이션은 쓰지 않는다"가
-        /// 그대로 남아 있고 콜라이더도 height 1.0이다. VARCO 휴머노이드 작업 이전의 도구라,
-        /// 지금 이 씬을 다시 지으면 <b>1~4번 작업이 통째로 사라진다</b>.
-        /// 특히 StrikeArmRig.armsOnlyMesh(R_Arms 메시)는 씬에만 있어서 되살릴 방법이 없다.
-        ///
-        /// 도구를 지금 씬에 맞게 갱신하는 것은 별도 작업이다. 그때까지 모르고 누르는 것만 막는다.
-        /// </summary>
-        static string WhatWouldBeLost()
-        {
-            var lost = new System.Collections.Generic.List<string>();
-            if (Object.FindFirstObjectByType<Demo.Player.StrikeArmRig>(FindObjectsInactive.Include) != null)
-                lost.Add("StrikeArmRig (팔 리그 · R_Arms 메시 참조)");
-            if (Object.FindFirstObjectByType<Demo.Player.PlayerAnimator>(FindObjectsInactive.Include) != null)
-                lost.Add("PlayerAnimator (걷기/달리기/타격 · 러쉬)");
-            if (Object.FindFirstObjectByType<Demo.Destruction.DestructionFX>(FindObjectsInactive.Include) != null)
-                lost.Add("DestructionFX (셰이크 · 히트스톱 값)");
-            return lost.Count == 0 ? null : string.Join("\n  · ", lost);
-        }
-
         static void BuildScene(bool askBeforeOverwrite)
         {
-            string lost = WhatWouldBeLost();
-            if (lost != null)
-            {
-                string msg = "이 도구는 <b>큐브 로봇</b>을 만든다 (휴머노이드 작업 이전 버전).\n" +
-                             "다시 지으면 아래가 사라지고, 메시 참조는 되살릴 수 없다:\n\n  · " + lost;
-                if (!askBeforeOverwrite)
-                {
-                    // 자동 호출에서는 모달을 띄우면 에디터가 멈춘다. 막고 이유만 남긴다.
-                    Debug.LogError("[SceneBootstrap] 다시 짓기를 멈췄다.\n" + msg.Replace("<b>", "").Replace("</b>", "") +
-                                   "\n\n정말 다시 지으려면 이 검사(WhatWouldBeLost)를 먼저 지울 것.");
-                    return;
-                }
-                if (!EditorUtility.DisplayDialog("지금 씬을 다시 지으면 작업이 사라진다",
-                        msg.Replace("<b>", "").Replace("</b>", ""), "그래도 짓는다", "취소"))
-                    return;
-            }
-
             // 존재 확인은 경로로만 한다. 여기서 객체를 로드하면 안 된다 —
             // 아래 NewScene이 참조 없는 에셋을 언로드해서 그 객체가 "fake null"이 되고,
             // 그 상태로 SerializedProperty에 넣으면 에러 없이 {fileID: 0}이 조용히 박힌다.
