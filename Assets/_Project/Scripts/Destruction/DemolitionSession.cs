@@ -39,81 +39,15 @@ namespace Demo.Destruction
 
         Vector3 targetPoint;
         Core.FollowCamera view;   // 전환이 끝났는가를 ModeBlend로 알려 준다
-        GameObject root;          // FractureProxy — 겹과 속의 부모
-        WallFracture[] layers;
-        Material innerMat;
-        Renderer[] hiddenOriginals;
-
-        /// <summary>
-        /// 파사드를 입히는 머티리얼. <b>한 개를 재사용한다.</b>
-        /// 파괴 화면은 한 번에 하나뿐이라 인스턴스가 하나면 충분하고,
-        /// 들어갈 때마다 만들면 나갈 때마다 버려야 하는 쓰레기가 된다 (규칙 6).
-        /// </summary>
-        Material facadeMat;
-
-        [Header("두께 — 깊이 방향으로 겹을 쌓는다 [지시 2026-09-23]")]
-        [SerializeField, Range(1, 8),
-         Tooltip("벽을 깊이 방향으로 몇 겹으로 <b>따로</b> 깎을 것인가 [지시 2026-09-23].\n" +
-                 "1이면 파편 하나가 벽 두께를 통째로 갖는다 — 두께가 곧 파편의 깊이라\n" +
-                 "부서진 자리에 단면이 그대로 드러나고, 앞뒤가 언제나 같이 무너진다.\n" +
-                 "2 이상은 depthLag와 함께 써서 '앞에서부터 파먹어 들어가는' 연출을 만들 때만\n" +
-                 "의미가 있다. 겹마다 정점을 한 벌씩 더 쓰므로 그만큼 파편이 굵어진다")]
-        int depthLayers = 3;
-
-        [SerializeField, Range(0f, 3f),
-         Tooltip("겹 두께를 <b>앞에서 뒤로 갈수록 두껍게</b> 하는 정도 [지시 2026-09-23].\n" +
-                 "겹 i의 두께가 (i+1)의 이 제곱에 비례한다. 0이면 모든 겹이 같은 두께다.\n" +
-                 "2면 세 겹이 1:4:9로 나뉘어, 1.8m 벽이 0.13 / 0.51 / 1.16m가 된다 — " +
-                 "앞은 얇은 겉껍질, 뒤로 갈수록 두꺼운 속살이라 부술수록 <b>더 단단한 것이 " +
-                 "나오는</b> 그림이 된다.\n" +
-                 "배열이 아니라 지수인 이유는 depthLayers를 바꿔도 모양이 유지되기 때문이다")]
-        float depthRamp = 2f;
-
-        [SerializeField, Range(0f, 0.9f),
-         Tooltip("뒷겹이 앞겹보다 얼마나 늦게 깎이는가. 한 층 분량 대비 비율이다. " +
-                 "<b>0이면 모든 겹이 동시에</b> 무너진다 — 벽 하나가 통째로 가는 그림이고, " +
-                 "겹이 하나일 때는 아무 의미가 없다")]
-        float depthLag = 0f;
-
-        [SerializeField, Range(20000, 200000),
-         Tooltip("파괴 화면 전체가 쓸 정점 수 [지시 2026-09-23]. 겹 수로 나눠 겹마다 배분된다. " +
-                 "삼각기둥은 칸당 15정점이라 겹을 늘리면 파편이 굵어질 수밖에 없다 — " +
-                 "예산을 고정해 두면 겹을 바꿔도 알아서 균형이 잡힌다. " +
-                 "CLAUDE.md 성능 예산: 프레임당 삼각형 15만")]
-        int vertexBudget = 120000;
-
-        [SerializeField, Range(0.05f, 3f),
-         Tooltip("<b>바라는</b> 벽 두께(m) [지시 2026-09-23]. 겹이 이 값을 n분의 1씩 나눠 갖는다. " +
-                 "겹이 하나면 파편 하나가 이 두께를 통째로 가지므로, 부서진 자리에 " +
-                 "그만한 단면이 그대로 드러난다 — 입체감은 거의 전부 여기서 나온다. " +
-                 "<b>바라는</b> 값인 이유는 건물이 이보다 얇을 수 있기 때문이다 — " +
-                 "실제 두께는 maxThicknessRatio가 건물 깊이에 맞춰 깎는다")]
-        float wallThickness = 1.8f;
-
-        [SerializeField, Range(0.2f, 0.8f),
-         Tooltip("벽 두께가 <b>건물 반깊이</b>의 몇 할을 넘지 못하게 할 것인가 [제안 2026-09-23]. " +
-                 "wallThickness가 절대 미터값이라 그냥 두면 얇은 건물에서 벽이 뒤로 뚫고 나온다 — " +
-                 "건물 앞뒤 깊이가 1.0m(경량)부터 12m(견고)까지 12배 차이라, " +
-                 "한 값이 모두에게 맞을 수가 없다. " +
-                 "0.6이면 남은 4할이 속(어둠)으로 남아, 벽을 뚫었을 때 뒤가 비는 것이 보인다")]
-        float maxThicknessRatio = 0.6f;
-
-        [SerializeField, Tooltip("벽 단면(속살) 색. 건물 속보다 <b>밝아야</b> 한다 — " +
-                                 "단면과 속이 같은 색이면 구멍이 다시 평면으로 읽힌다")]
-        Color wallInnerColor = new Color(0.26f, 0.25f, 0.23f, 1f);
-
-        [SerializeField, Tooltip("건물 속 벽까지의 <b>최소</b> 깊이(m). " +
-                                 "속은 언제나 벽 뒤에 있어야 하므로, 벽이 이보다 두꺼우면 " +
-                                 "속이 알아서 더 물러난다 — 두 값을 손으로 맞춰 둘 필요가 없다")]
-        float interiorDepth = 1.0f;
+        [Header("조각 판 더미 — 세우고, 보여주고, 치운다")]
+        [SerializeField, Tooltip("벽을 겹으로 세우는 일은 전부 FractureProxy.cs에 있다. "
+                                 + "이 세션은 게이지와 탭만 본다")]
+        FractureProxy proxy = new FractureProxy();
 
         [SerializeField, Range(0.2f, 3f),
          Tooltip("마지막 쾅 뒤에 쏟아지는 것을 보여 줄 최대 시간(초). " +
                  "낙하와 내려앉기가 먼저 끝나면 그때 바로 닫는다 — 이 값은 안전장치다")]
         float finishMaxSeconds = 1.2f;
-
-        [SerializeField, Tooltip("건물 속 어둠. 완전 검정으로 두면 얇은 금이 잉크선처럼 보인다")]
-        Color interiorColor = new Color(0.11f, 0.10f, 0.09f, 1f);
 
         void Awake()
         {
@@ -121,7 +55,7 @@ namespace Demo.Destruction
             if (spawner == null) spawner = FindFirstObjectByType<DebrisSpawner>();
 
             // 전환이 끝났는지 물어볼 곳. 규칙 5 — Update에서 Find를 돌리지 않는다.
-            // 못 찾으면 ShowProxy가 곧바로 걸려서 예전과 같게 굴러간다.
+            // 못 찾으면 교체가 곧바로 걸려서 예전과 같게 굴러간다.
             view = FindFirstObjectByType<Core.FollowCamera>();
 
             // 연출 컴포넌트는 <b>스스로 붙인다</b> [2026-09-28].
@@ -160,266 +94,14 @@ namespace Demo.Destruction
             TapCount = 0;
             targetPoint = target != null ? target.transform.position : Vector3.zero;
 
-            BuildFractureProxy(target);
+            proxy.Build(target);
         }
 
-        /// <summary>
-        /// 파괴 화면 전용 조각 프록시를 세운다.
-        ///
-        /// 필드의 VARCO 메시는 통짜라 런타임 절단이 비싸다. 대신 벽 앞에 조각으로 나뉜 판을
-        /// 겹쳐 세우고 원본은 숨긴다 — 화면 전환이 있어 바뀌는 순간이 안 보인다.
-        /// 한 번에 한 채만 세우므로 조각이 수백 개여도 감당된다.
-        /// </summary>
-        void BuildFractureProxy(Destructible target)
-        {
-            ClearProxy();
-            if (target == null || target.Data == null) return;
-
-            // 비활성 자식까지 전부 모은다. Destructible은 Intact/Damaged/Rubble 셋을 자식으로
-            // 달아두고 켜고 끄는 구조라, 지금 켜져 있는 하나만 숨기면 나중에 단계가 바뀌는 순간
-            // 꺼져 있던 메시가 조각 판 뒤에서 되살아난다 — 그게 "원본이 다시 보인다"였다.
-            Renderer[] all = target.GetComponentsInChildren<Renderer>(true);
-            Renderer src = null;
-            for (int i = 0; i < all.Length; i++)
-                if (all[i].gameObject.activeInHierarchy) { src = all[i]; break; }
-            Material mat = src != null ? src.sharedMaterial : null;
-
-            var go = new GameObject("FractureProxy");
-            root = go;
-            go.transform.SetParent(target.transform, false);
-
-            // 네 면 중 하나에 <b>딱 맞춰</b> 세운다 [지시 2026-09-23].
-            // 예전에는 플레이어 방향을 그대로 따라 비스듬히 섰는데, 파사드 그림을 입히는
-            // 지금은 그러면 안 된다 — 면에 안 맞으면 입구가 모서리에 걸쳐 잘린다.
-            // 면은 GameModeController가 상호작용 순간에 확정해 둔 값을 그대로 쓴다.
-            Core.GameModeController mode = Core.GameModeController.Instance;
-            int face = mode != null ? mode.TargetFace : StructureFace.Front;
-
-            Vector3 size = target.Data.colliderSize;
-            Vector3 outward = StructureFace.Normal(target.transform, face);
-            float width = StructureFace.Width(size, face);
-
-            go.transform.position = target.transform.position
-                                  + outward * (StructureFace.Offset(size, face) + 0.02f);
-            go.transform.rotation = Quaternion.LookRotation(-outward, Vector3.up);
-
-            // 깊이 방향으로 겹을 쌓는다 [지시 2026-09-23].
-            //
-            // 한 겹이면 조각이 지워질 때 벽 두께가 통째로 사라진다 — 주먹 한 방에 앞에서
-            // 뒤까지 뚫리는 그림이고, 그게 "평면 같다"의 정체였다. 겹마다 <b>자기 진행도</b>를
-            // 주면 그때부터 두께가 그림이 아니라 <b>재료</b>가 된다.
-            //
-            // 앞겹만 텍스처를 입는다. 뒷겹은 벽의 속살이라 그림이 없는 것이 맞다 —
-            // 같은 파사드를 뒤에도 붙이면 창문이 두 겹으로 겹쳐 보인다.
-            int floors = Mathf.Max(1, target.Data.floors);
-            int n = Mathf.Max(1, depthLayers);
-
-            // 겹이 <b>같은 무늬</b>를 쓰게 하는 씨앗. 건물마다 달라야 매번 같은 모양으로
-            // 부서지지 않고, 겹끼리는 같아야 조각이 깊이로 맞물린다.
-            int layoutSeed = Random.Range(int.MinValue, int.MaxValue);
-            // 벽은 <b>건물보다 두꺼울 수 없다</b> [지시 2026-09-23].
-            //
-            // wallThickness가 절대 미터값이라 그냥 쓰면 얇은 건물에서 벽이 뒤로 뚫고 나온다.
-            // 경량 건물은 앞뒤가 1m뿐이라 1.8m 벽이면 건물의 1.8배다. 금 두께를 미터로 줬다가
-            // 작은 파편이 통째로 사라졌던 것과 같은 함정이다 - 크기가 12배 벌어지는 값에
-            // 절대값 하나를 물리면 어느 한쪽이 반드시 깨진다.
-            float half = StructureFace.Offset(size, face);
-            float thick = Mathf.Min(wallThickness, half * maxThicknessRatio);
-
-            // 겹마다 <b>다른 두께</b>를 갖는다 [지시 2026-09-23].
-            // 앞은 얇은 껍질, 뒤로 갈수록 두꺼운 속살이다. 합은 언제나 벽 두께와 같다.
-            float[] band = new float[n];
-            float wsum = 0f;
-            for (int i = 0; i < n; i++)
-            {
-                band[i] = Mathf.Pow(i + 1, depthRamp);
-                wsum += band[i];
-            }
-            for (int i = 0; i < n; i++) band[i] = thick * band[i] / wsum;
-
-            layers = new WallFracture[n];
-            float zAt = 0f;
-            for (int i = 0; i < n; i++)
-            {
-                var lgo = new GameObject("FractureLayer" + i);
-                lgo.transform.SetParent(go.transform, false);
-                lgo.transform.localPosition = new Vector3(0f, 0f, zAt);   // +Z가 건물 안쪽
-
-                lgo.AddComponent<MeshFilter>();
-                lgo.AddComponent<MeshRenderer>();
-                layers[i] = lgo.AddComponent<WallFracture>();
-                // 겹마다 <b>다른</b> 무늬를 뽑는다 [지시 2026-09-23].
-                //
-                // 예전에는 겹끼리 똑같이 맞췄다. 앞뒤가 따로 무너지는 것을 막으려던 것인데,
-                // 무늬까지 같을 필요는 없었다 — 따로 무너지던 진짜 원인은 겹마다 진행도를
-                // 어긋나게 주던 depthLag였고 그건 0으로 껐다.
-                //
-                // 무늬가 같으면 파편이 깊이로 <b>곧은 기둥</b>이 되어, 부서진 자리 단면이
-                // 격자처럼 가지런하다. 겹마다 다르게 뽑으면 앞 파편의 경계와 뒤 파편의 경계가
-                // 어긋나 단면이 켜켜이 물린다 — 깊이에도 보로노이가 한 번 더 걸리는 셈이다.
-                layers[i].Build(new Vector2(width, size.y), floors,
-                                i == 0 ? FacadeMaterial(target.Data, face, mat) : InnerMaterial(),
-                                band[i], layoutSeed + i * 7919, vertexBudget / n, i == 0, thick);
-                zAt += band[i];
-            }
-
-            // 맨 뒤 겹까지 뚫렸을 때 보이는 건물 속.
-            //
-            // 속은 <b>반드시 벽 뒤</b>에 있어야 한다. 앞에 오면 벽이 어둠을 뚫고 튀어나와,
-            // 부순 자리에 구멍이 아니라 벽 단면만 남는다. 그래서 두 값을 손으로 맞추는 대신
-            // 벽 두께에서 끌어올린다 - 두께를 얼마로 바꾸든 이 관계가 깨지지 않는다.
-            float depth = Mathf.Min(Mathf.Max(interiorDepth, thick * 1.25f), half * 0.95f);
-            var shell = go.AddComponent<FractureShell>();
-            shell.Build(width, size.y, depth, interiorColor);
-            shell.Follow(layers[0]);
-
-            // <b>아직 바꾸지 않는다</b> [고침 2026-10-01].
-            //
-            // 이 함수 첫머리는 "화면 전환이 있어 바뀌는 순간이 안 보인다"고 적어 뒀는데,
-            // 전환은 컷이 아니라 <b>카메라 비행</b>(FollowCamera.modeBlendSeconds 0.35초)이다.
-            // 그 동안 플레이어는 프록시를 <b>비스듬히</b> 보게 된다 — 실측 63도에서 시작한다.
-            //
-            // 프록시는 정면 전용 무대장치다. FractureShell 주석이 스스로 적어 놨다:
-            // "1인칭으로 정면에서만 보므로 어두운 판 한 장이면 충분하다".
-            // 비스듬히 보면 깊이가 다른 네 장(앞겹 0.13 / 중간 0.51 / 뒷겹 1.16m / 속판)이
-            // 각각 다른 자리로 투영돼 <b>화면에서 115~172px 어긋나 미끄러진다</b> —
-            // 같은 실루엣 네 개가 겹쳐 보이는 것이 그것이다 [지적 2026-10-01].
-            //
-            // 그래서 비행이 끝나 정면에 설 때까지 <b>원본을 그대로 두고</b> 프록시를 숨긴다.
-            // 원본은 큐브 하나라 어느 각도에서 봐도 한 덩어리다.
-            // 바꿔치기가 안 보인다는 것은 쟀다 — 정면에서 두 그림의 최대 픽셀 차이가 2/255다.
-            proxyRenderers = go.GetComponentsInChildren<Renderer>(true);
-            for (int i = 0; i < proxyRenderers.Length; i++) proxyRenderers[i].enabled = false;
-            hiddenOriginals = all;
-            proxyShown = false;
-        }
-
-        Renderer[] proxyRenderers;
-        bool proxyShown;
-
-        /// <summary>
-        /// 원본 ↔ 프록시를 바꾼다. 비행이 끝났거나(정면에 섰다) 플레이어가 먼저 두드렸을 때.
-        ///
-        /// <b>두드림에도 거는 이유</b>: 진행도는 숨겨 둔 프록시에도 그대로 들어간다.
-        /// 전환 중에 때리고 나서 바꾸면 이미 금이 간 벽이 튀어나온다.
-        /// </summary>
-        void ShowProxy()
-        {
-            if (proxyShown || proxyRenderers == null) return;
-            proxyShown = true;
-            for (int i = 0; i < proxyRenderers.Length; i++)
-                if (proxyRenderers[i] != null) proxyRenderers[i].enabled = true;
-            if (hiddenOriginals != null)
-                for (int i = 0; i < hiddenOriginals.Length; i++)
-                    if (hiddenOriginals[i] != null) hiddenOriginals[i].enabled = false;
-        }
-
-        void ClearProxy()
-        {
-            if (hiddenOriginals != null)
-            {
-                for (int i = 0; i < hiddenOriginals.Length; i++)
-                    if (hiddenOriginals[i] != null) hiddenOriginals[i].enabled = true;
-                hiddenOriginals = null;
-            }
-
-            // 겹이 아니라 <b>껍데기부터</b> 지운다. 겹은 껍데기의 자식이라 같이 딸려 간다.
-            // 겹만 지우면 빈 FractureProxy가 씬에 계속 쌓인다 — 실측으로 3개까지 남았다.
-            if (root != null) Destroy(root);
-            root = null;
-            layers = null;
-            proxyRenderers = null;
-            proxyShown = false;
-
-        }
-
-        /// <summary>
-        /// 게이지를 겹마다 <b>다른 진행도</b>로 나눠 먹인다 [지시 2026-09-23].
-        ///
-        /// 뒷겹이 늦게 깎여야 "앞을 떼어내니 속살이 나왔다"가 된다. 전부 같은 값을 주면
-        /// 겹을 아무리 쌓아도 동시에 뚫려서 한 겹과 구별되지 않는다.
-        ///
-        /// 지연을 <b>한 층 분량으로 환산</b>하는 것이 중요하다. 진행도는 건물 전체를 0~1로
-        /// 재므로, 0.3을 그대로 빼면 6층 건물에서 앞겹이 <b>1.8층</b>을 앞서간다 —
-        /// 깊이가 아니라 층이 어긋나서, 1층을 부수는데 뒷겹은 아직 시작도 안 한 꼴이 된다.
-        /// </summary>
-        void PushProgress()
-        {
-            if (layers == null) return;
-
-            int floors = Target != null && Target.Data != null
-                ? Mathf.Max(1, Target.Data.floors) : 1;
-
-            // depthLag는 <b>맨 앞겹과 맨 뒷겹 사이의 총 간격</b>이다. 겹 수로 한 번 더
-            // 나눠야 겹을 늘려도 그 총량이 유지된다. 안 나누면 4겹일 때 뒷겹이 0.9층이나
-            // 뒤처져서, 1층 앞면을 다 깎았는데 뒷겹은 시작도 안 한 꼴이 된다.
-            float lag = depthLag / floors / Mathf.Max(1, layers.Length - 1);
-
-            // 마지막 겹도 게이지 1에서는 다 깎여야 한다. 그래서 남은 구간에 맞춰 늘린다.
-            float span = Mathf.Max(0.01f, 1f - lag * (layers.Length - 1));
-
-            for (int i = 0; i < layers.Length; i++)
-                if (layers[i] != null)
-                    layers[i].SetProgress(Mathf.Clamp01((Gauge - i * lag) / span));
-        }
-
-        /// <summary>벽의 속살. 그림 없는 콘크리트 한 색이다 — 파사드를 뒤에도 붙이면 창문이 겹쳐 보인다.</summary>
-        Material InnerMaterial()
-        {
-            if (innerMat != null) return innerMat;
-
-            Shader sh = Shader.Find("Universal Render Pipeline/Lit")
-                     ?? Shader.Find("Universal Render Pipeline/Unlit");
-            innerMat = new Material(sh) { name = "WallInner (instance)" };
-            if (innerMat.HasProperty(BaseColorId)) innerMat.SetColor(BaseColorId, wallInnerColor);
-            if (innerMat.HasProperty(ColorId))     innerMat.SetColor(ColorId, wallInnerColor);
-            return innerMat;
-        }
-
-        static readonly int BaseMapId   = Shader.PropertyToID("_BaseMap");
-        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        static readonly int ColorId     = Shader.PropertyToID("_Color");
-
-        /// <summary>
-        /// 그 면의 그림을 입힌 머티리얼. <b>그림이 아직 없으면 건물 머티리얼을 그대로 돌려준다</b> —
-        /// 5종을 한꺼번에 뽑지 못하므로, 뽑힌 종부터 차례로 켜지게 두는 편이 낫다.
-        ///
-        /// 건물 머티리얼을 <b>복제하지 않고 셰이더만</b> 가져다 새로 만든다. 복제하면 회색 틴트까지
-        /// 따라와서 그림이 그만큼 어두워진다. 셰이더를 맞추는 이유는 따로 있다 — 파괴 화면만
-        /// 다른 셰이더를 쓰면 그 화면에서만 조명이 달라 보인다.
-        /// </summary>
-        Material FacadeMaterial(StructureData data, int face, Material fallback)
-        {
-            Texture2D tex = data != null ? data.Facade(face) : null;
-            if (tex == null) return fallback;
-
-            if (facadeMat == null)
-            {
-                Shader sh = fallback != null ? fallback.shader
-                                             : Shader.Find("Universal Render Pipeline/Lit");
-                facadeMat = new Material(sh) { name = "FacadeProxy (instance)" };
-            }
-
-            if (facadeMat.HasProperty(BaseColorId)) facadeMat.SetColor(BaseColorId, Color.white);
-            if (facadeMat.HasProperty(ColorId))     facadeMat.SetColor(ColorId, Color.white);
-
-            if (facadeMat.HasProperty(BaseMapId)) facadeMat.SetTexture(BaseMapId, tex);
-            else facadeMat.mainTexture = tex;
-
-            return facadeMat;
-        }
-
-        void OnDestroy()
-        {
-            if (facadeMat != null) Destroy(facadeMat);
-            facadeMat = null;
-            if (innerMat != null) Destroy(innerMat);
-            innerMat = null;
-        }
+        void OnDestroy() => proxy.Dispose();
 
         void End()
         {
-            ClearProxy();
+            proxy.Clear();
             Target = null;
             Gauge = 0f;
         }
@@ -429,8 +111,8 @@ namespace Demo.Destruction
             GameModeController mode = GameModeController.Instance;
             if (mode == null || !mode.IsDemolition || Target == null) return;
 
-            // 카메라가 날아와 정면에 서면 그때 프록시로 바꾼다 (BuildFractureProxy 주석 참조).
-            if (!proxyShown && (view == null || view.ModeBlend >= 1f)) ShowProxy();
+            // 카메라가 날아와 정면에 서면 그때 조각 판으로 바꾼다 (FractureProxy.Build 주석 참조).
+            if (!proxy.Shown && (view == null || view.ModeBlend >= 1f)) proxy.Show();
 
             // 마지막 쾅 뒤에는 입력을 안 받는다. 쏟아지는 것을 보여 주고 나서 닫는다.
             if (finishing) { TickFinish(); return; }
@@ -438,7 +120,7 @@ namespace Demo.Destruction
             if (input == null || !input.ActionPressedThisFrame) return;
 
             // 때리는 순간에는 무조건 바꾼다 — 숨겨 둔 벽에 금이 가면 안 된다.
-            ShowProxy();
+            proxy.Show();
             Tap();
         }
 
@@ -457,13 +139,8 @@ namespace Demo.Destruction
         {
             finishElapsed += Time.deltaTime;
 
-            bool moving = false;
-            if (layers != null)
-                for (int i = 0; i < layers.Length; i++)
-                    if (layers[i] != null && layers[i].Animating) { moving = true; break; }
-
             // 멈춰 서 있는데 안 끝나는 일이 없도록 상한을 둔다.
-            if (moving && finishElapsed < finishMaxSeconds) return;
+            if (proxy.Animating && finishElapsed < finishMaxSeconds) return;
 
             finishing = false;
             CloseOut();
@@ -510,7 +187,7 @@ namespace Demo.Destruction
             // 3단계 메시 교체는 structureDamagedAt01을 넘는 순간 Damaged 메시를 켜는데,
             // 그 메시가 조각 판 뒤에서 통짜로 나타나 "부서지다 말고 원본이 되살아난" 것처럼 보인다.
             // 어차피 이 화면을 나가면 잔해가 되므로, 중간 단계를 보여줄 이유가 없다.
-            PushProgress();
+            proxy.SetGauge(Gauge, Target.Data != null ? Target.Data.floors : 1);
 
             if (fx != null)
             {
