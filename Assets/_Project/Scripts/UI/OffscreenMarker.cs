@@ -15,7 +15,9 @@ namespace Demo.UI
     /// <b>Canvas도 EventSystem도 쓰지 않는다.</b> <see cref="TouchControls"/>와 같은 이유다 —
     /// uGUI로 만들면 프리팹과 씬 와이어링이 늘어나는데 그건 사람이 손으로 하는 작업이고
     /// (CLAUDE.md 규칙 1), 텍스처 한 장을 회전시켜 그리는 데 EventSystem 한 겹이 필요하지 않다.
-    /// 텍스처는 SceneBootstrap이 코드로 물려 준다.
+    /// 텍스처는 씬에 물려 둔다 — 예전에는 SceneBootstrap이 코드로 꽂아 줬지만
+    /// 그 도구는 지웠다 [2026-10-01]. 씬이 1인칭 팔 리그처럼 되살릴 수 없는 참조를
+    /// 들고 있게 되면서, 씬을 다시 짓는 도구는 쓸모보다 위험이 커졌다.
     ///
     /// <b>파괴 화면에서는 나오지 않는다.</b> 그때 카메라는 건물 1층에 붙어 있고 구멍은
     /// 거의 항상 화면 밖이라, 켜 두면 화살표가 가장자리에 붙박이로 남아 시야만 가린다.
@@ -26,7 +28,7 @@ namespace Demo.UI
     public sealed class OffscreenMarker : MonoBehaviour
     {
         [SerializeField, Tooltip("화면 밖 방향을 가리킬 화살표. 오른쪽(+X)을 향한 그림이어야 한다.\n" +
-                                 "SceneBootstrap이 T_ArrowOffscreen을 물려 준다")]
+                                 "씬에 T_ArrowOffscreen이 물려 있다. 비면 화살표가 안 그려진다")]
         Texture2D arrow;
 
         [SerializeField, Range(0.03f, 0.25f), Tooltip("화살표 한 변. 화면 높이 대비")]

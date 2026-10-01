@@ -38,15 +38,19 @@ namespace Demo.Destruction
         [SerializeField, Tooltip("조각이 사라지는 순서")]
         Order removalOrder = Order.CenterOut;
 
-        /// <summary>조각을 지우는 순서. 무늬와 배정은 그대로 두고 정렬 기준만 바뀐다.</summary>
+        /// <summary>
+        /// 조각을 지우는 순서. 무늬와 배정은 그대로 두고 정렬 기준만 바뀐다.
+        ///
+        /// 셋째 값 FromImpact("맞은 자리에서 번진다")는 지웠다 [2026-10-01] —
+        /// 기준점을 받던 <c>ImpactPoint</c>에 값을 넣어 주는 곳이 한 군데도 없어서
+        /// 고를 수 있어도 동작하지 않는 선택지였다. git에 남아 있다.
+        /// </summary>
         public enum Order
         {
             /// <summary>가운데에서 바깥으로 번진다 [지시 2026-09-22].</summary>
             CenterOut,
             /// <summary>위에서부터 차례로 무너진다. 기획 단계의 원래 그림.</summary>
             TopDown,
-            /// <summary>맞은 자리에서 번진다. 참조 영상의 방식.</summary>
-            FromImpact,
         }
 
         readonly FracturePattern pattern = new FracturePattern();
@@ -78,11 +82,6 @@ namespace Demo.Destruction
         /// <summary>실제로 보이는 조각 수.</summary>
         public int PieceCount => pattern.LiveSeeds;
         public int RemovedCount => pattern.RemovedCount;
-
-        /// <summary><see cref="Order.FromImpact"/>의 기준점. 벽 로컬 좌표. Build 전에 넣는다.</summary>
-        public Vector2 ImpactPoint { get; set; }
-
-        public Order RemovalOrder { get => removalOrder; set => removalOrder = value; }
 
         // ── 만들기 ───────────────────────────────────────────────────────────────
 
@@ -140,8 +139,13 @@ namespace Demo.Destruction
             int seeds = Mathf.Clamp(wanted, floorCount * 2,
                                     Mathf.Max(floorCount * 2, vertexBudget / 31));
 
-            Vector2 from = removalOrder == Order.FromImpact
-                ? ImpactPoint : new Vector2(0f, size.y * 0.5f);
+            // 번지기 시작하는 자리는 <b>벽 한가운데</b>다.
+            //
+            // 예전에는 Order.FromImpact로 "맞은 자리에서 번진다"를 고를 수 있었고 그 기준점을
+            // ImpactPoint라는 공개 프로퍼티로 받았는데, <b>그걸 넣어 주는 곳이 한 군데도 없었다</b>.
+            // 아무도 안 쓰는 공개 API를 지우면서 같이 걷어냈다 [2026-10-01].
+            // 되살리려면 FromImpact 분기와 함께 git에서 꺼내면 된다.
+            Vector2 from = new Vector2(0f, size.y * 0.5f);
 
             // 무늬를 <b>겹끼리 똑같이</b> 뽑는다 [지시 2026-09-23].
             //
