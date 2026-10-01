@@ -53,12 +53,13 @@ namespace Demo.Player
                  "걸 때는 √속도를 곱한다 — 5.83/√0.45 = 8.69로 달리기 8.79와 거의 같다")]
         [SerializeField, Range(-30f, 30f)] float torsoYaw = 8.75f;
 
-        [Tooltip("<b>걸을 때</b> 되돌릴 옆기울(도) [제안·미승인 2026-10-01]. 실측 +4.09도(Hips).\n" +
-                 "이것이 '척추 측만증처럼 보인다'의 정체다 — 다만 휜 게 아니라 통째로 기운 것이라 " +
-                 "골반 하나만 되돌리면 전부 따라온다 (옆기울이 Hips 4.09 -> Neck 4.42로 평평하다).\n" +
-                 "<b>달리기에는 안 건다.</b> 달릴 때 옆기울은 −5.93~+5.52로 0을 중심으로 대칭이라 " +
-                 "치우침이 아니라 정상적인 몸 흔들림이고, 빼면 오히려 뻣뻣해진다")]
-        [SerializeField, Range(-15f, 15f)] float torsoLean = 4.1f;
+        [Tooltip("<b>걸을 때</b> 되돌릴 좌우 기울기(도) [제안·미승인 2026-10-01].\n" +
+                 "값은 <b>위치로 잰 것</b>이다 — Hips에서 Neck으로 가는 방향이 좌우로 얼마나 " +
+                 "눕는가. 뼈의 로컬 축으로 재면 <b>앞뒤 숙임이 좌우 기울기로 샌다</b>. " +
+                 "그 탓에 한때 4.09도로 잘못 읽고 멀쩡한 허리를 꺾어 놓은 적이 있다.\n" +
+                 "실측: 걷기 +2.7도(진짜 기울어져 있다) / 달리기 +0.4도(이미 똑바르다).\n" +
+                 "<b>달리기에는 안 건다</b> — 아래 leanScale이 거기서 0이 된다")]
+        [SerializeField, Range(-15f, 15f)] float torsoLean = 3.0f;
 
         [Header("머리 — 멈춰 있을 때도 틀어져 있다")]
         [Tooltip("머리가 <b>몸통보다 더</b> 틀어진 몫(도) [제안·미승인]. " +
@@ -77,17 +78,21 @@ namespace Demo.Player
                  "로봇 머리가 큰 상자라 이 각이 '고개를 떨구고 있다'로 아주 크게 읽힌다")]
         [SerializeField, Range(-20f, 20f)] float headPitch = 6.0f;
 
-        Transform hips, head;
+        Transform hips, neck, head;
         bool bound;
 
-        /// <summary>뼈를 한 번만 찾아 둔다. 규칙 5 — Update에서 Find를 돌리지 않는다.</summary>
+        /// <summary>
+        /// 뼈를 한 번만 찾아 둔다. 규칙 5 — Update에서 Find를 돌리지 않는다.
+        /// Neck이 필요한 이유는 <b>척추 방향</b>을 Hips→Neck으로 재기 때문이다 (Apply 참조).
+        /// </summary>
         public void Bind(Transform root)
         {
-            hips = null; head = null;
+            hips = null; neck = null; head = null;
             if (root != null)
                 foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
                 {
                     if (hips == null && t.name == "Hips") hips = t;
+                    else if (neck == null && t.name == "Neck") neck = t;
                     else if (head == null && t.name == "Head") head = t;
                 }
             bound = hips != null || head != null;
@@ -127,9 +132,27 @@ namespace Demo.Player
             float leanScale = 4f * m * (1f - m);
 
             if (hips != null && m > 0.0001f)
-                hips.rotation = Quaternion.AngleAxis(torsoYaw * yawScale * k, up)
+            {
+                // <b>척추 자신의 축으로 돌린다. 월드 수직축이 아니다</b> [고침 2026-10-01].
+                //
+                // 달릴 때 척추는 앞으로 17.9도 숙어 있다. 그걸 월드 수직축으로 8.75도 돌리면
+                // 숙인 축이 옆으로 쓸려 나가면서 <b>없던 좌우 기울기가 생긴다</b> —
+                // asin(sin17.9 × sin8.75) = 2.68도, 실측 +2.8도와 같다.
+                // 달리기는 원래 기울기가 0.4도로 멀쩡했는데 보정이 3.2도로 만들어 놓고 있었다.
+                //
+                // 척추 축으로 돌리면 척추 방향 자체가 안 움직이므로 기울기가 생길 수 없다.
+                // "몸을 틀었다"는 말뜻도 수직축이 아니라 <b>제 몸통 축</b>을 중심으로 돈 것이다.
+                Vector3 twistAxis = up;
+                if (neck != null)
+                {
+                    Vector3 spine = neck.position - hips.position;   // 돌리기 <b>전에</b> 잰다
+                    if (spine.sqrMagnitude > 1e-6f) twistAxis = spine.normalized;
+                }
+
+                hips.rotation = Quaternion.AngleAxis(torsoYaw * yawScale * k, twistAxis)
                               * Quaternion.AngleAxis(torsoLean * leanScale * k, fwd)
                               * hips.rotation;
+            }
 
             // 머리. 몸통과 달리 멈춰 있을 때도 틀어져 있어서 늘 같은 몫을 뺀다.
             // Hips 보정이 이미 들어간 뒤라, 여기서 빼는 것은 '머리가 더 틀어진 몫'뿐이다.
