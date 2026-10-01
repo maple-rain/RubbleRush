@@ -38,6 +38,7 @@ namespace Demo.Destruction
         public int TapCount { get; private set; }
 
         Vector3 targetPoint;
+        Core.FollowCamera view;   // 전환이 끝났는가를 ModeBlend로 알려 준다
         GameObject root;          // FractureProxy — 겹과 속의 부모
         WallFracture[] layers;
         Material innerMat;
@@ -118,6 +119,10 @@ namespace Demo.Destruction
         {
             if (input == null) input = FindFirstObjectByType<Player.InputRouter>();
             if (spawner == null) spawner = FindFirstObjectByType<DebrisSpawner>();
+
+            // 전환이 끝났는지 물어볼 곳. 규칙 5 — Update에서 Find를 돌리지 않는다.
+            // 못 찾으면 ShowProxy가 곧바로 걸려서 예전과 같게 굴러간다.
+            view = FindFirstObjectByType<Core.FollowCamera>();
 
             // 연출 컴포넌트는 <b>스스로 붙인다</b> [2026-09-28].
             //
@@ -268,9 +273,45 @@ namespace Demo.Destruction
             shell.Build(width, size.y, depth, interiorColor);
             shell.Follow(layers[0]);
 
-            // 원본은 전부 숨긴다. 조각 판이 그 자리를 대신한다.
-            for (int i = 0; i < all.Length; i++) all[i].enabled = false;
+            // <b>아직 바꾸지 않는다</b> [고침 2026-10-01].
+            //
+            // 이 함수 첫머리는 "화면 전환이 있어 바뀌는 순간이 안 보인다"고 적어 뒀는데,
+            // 전환은 컷이 아니라 <b>카메라 비행</b>(FollowCamera.modeBlendSeconds 0.35초)이다.
+            // 그 동안 플레이어는 프록시를 <b>비스듬히</b> 보게 된다 — 실측 63도에서 시작한다.
+            //
+            // 프록시는 정면 전용 무대장치다. FractureShell 주석이 스스로 적어 놨다:
+            // "1인칭으로 정면에서만 보므로 어두운 판 한 장이면 충분하다".
+            // 비스듬히 보면 깊이가 다른 네 장(앞겹 0.13 / 중간 0.51 / 뒷겹 1.16m / 속판)이
+            // 각각 다른 자리로 투영돼 <b>화면에서 115~172px 어긋나 미끄러진다</b> —
+            // 같은 실루엣 네 개가 겹쳐 보이는 것이 그것이다 [지적 2026-10-01].
+            //
+            // 그래서 비행이 끝나 정면에 설 때까지 <b>원본을 그대로 두고</b> 프록시를 숨긴다.
+            // 원본은 큐브 하나라 어느 각도에서 봐도 한 덩어리다.
+            // 바꿔치기가 안 보인다는 것은 쟀다 — 정면에서 두 그림의 최대 픽셀 차이가 2/255다.
+            proxyRenderers = go.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < proxyRenderers.Length; i++) proxyRenderers[i].enabled = false;
             hiddenOriginals = all;
+            proxyShown = false;
+        }
+
+        Renderer[] proxyRenderers;
+        bool proxyShown;
+
+        /// <summary>
+        /// 원본 ↔ 프록시를 바꾼다. 비행이 끝났거나(정면에 섰다) 플레이어가 먼저 두드렸을 때.
+        ///
+        /// <b>두드림에도 거는 이유</b>: 진행도는 숨겨 둔 프록시에도 그대로 들어간다.
+        /// 전환 중에 때리고 나서 바꾸면 이미 금이 간 벽이 튀어나온다.
+        /// </summary>
+        void ShowProxy()
+        {
+            if (proxyShown || proxyRenderers == null) return;
+            proxyShown = true;
+            for (int i = 0; i < proxyRenderers.Length; i++)
+                if (proxyRenderers[i] != null) proxyRenderers[i].enabled = true;
+            if (hiddenOriginals != null)
+                for (int i = 0; i < hiddenOriginals.Length; i++)
+                    if (hiddenOriginals[i] != null) hiddenOriginals[i].enabled = false;
         }
 
         void ClearProxy()
@@ -287,6 +328,8 @@ namespace Demo.Destruction
             if (root != null) Destroy(root);
             root = null;
             layers = null;
+            proxyRenderers = null;
+            proxyShown = false;
 
         }
 
@@ -386,11 +429,16 @@ namespace Demo.Destruction
             GameModeController mode = GameModeController.Instance;
             if (mode == null || !mode.IsDemolition || Target == null) return;
 
+            // 카메라가 날아와 정면에 서면 그때 프록시로 바꾼다 (BuildFractureProxy 주석 참조).
+            if (!proxyShown && (view == null || view.ModeBlend >= 1f)) ShowProxy();
+
             // 마지막 쾅 뒤에는 입력을 안 받는다. 쏟아지는 것을 보여 주고 나서 닫는다.
             if (finishing) { TickFinish(); return; }
 
             if (input == null || !input.ActionPressedThisFrame) return;
 
+            // 때리는 순간에는 무조건 바꾼다 — 숨겨 둔 벽에 금이 가면 안 된다.
+            ShowProxy();
             Tap();
         }
 
