@@ -17,7 +17,7 @@ namespace Demo.Collection
     ///
     /// <see cref="Mode"/>로 끄고 켤 수 있다. 어느 조합이 맞는지는 기획자가 직접 보고 정한다.
     /// </summary>
-    public sealed class CargoTow : MonoBehaviour
+    public sealed partial class CargoTow : MonoBehaviour
     {
         /// <summary>무엇에 물리를 걸 것인가 [지시 13번]. 기획자가 직접 비교하라고 열어 둔다.</summary>
         public enum PhysicsMode
@@ -64,7 +64,15 @@ namespace Demo.Collection
         [Header("매듭 — ③ 장력")]
         [SerializeField] TowTension tension = new TowTension();
 
+        [Header("걸림 — 14번")]
+        [SerializeField, Tooltip("끌려오던 잔해가 건물·토대에 걸렸을 때 무엇을 할 것인가")]
+        Hazard.DebrisSnag snag = new Hazard.DebrisSnag();
+
         readonly List<Debris> towed = new List<Debris>(64);
+
+        // 걸린 조각을 모아 뒀다 루프가 끝난 뒤에 처리한다 —
+        // 도는 중에 towed를 건드리면 인덱스가 어긋난다. 매 프레임 new 하면 GC가 튄다.
+        readonly List<Debris> snagged = new List<Debris>(32);
 
         /// <summary>끌고 있는 총 단위. 이동 속도와 카메라 줌이 읽는다.</summary>
         public int TotalUnits { get; private set; }
@@ -80,6 +88,15 @@ namespace Demo.Collection
 
         /// <summary>실측용. 그물 테두리 점의 월드 좌표. 준비 안 됐으면 0개.</summary>
         public CableRope Net => net;
+
+        /// <summary>실측용·기획 비교용. 걸림 정책 [14번].</summary>
+        public Hazard.DebrisSnag Snag => snag;
+
+        /// <summary>
+        /// 걸려 있는 동안의 속도 배율. 안 걸렸으면 1 [14번].
+        /// <see cref="Player.PlayerController"/>가 곱한다 — 견인 감속 곡선(기획자 TODO)과는 별개 축이다.
+        /// </summary>
+        public float SpeedScale => snag.SpeedScale;
 
         bool UseTension => mode == PhysicsMode.TensionOnly || mode == PhysicsMode.Both;
         bool UseRope => mode == PhysicsMode.RopeOnly || mode == PhysicsMode.Both;
@@ -173,108 +190,6 @@ namespace Demo.Collection
             TotalUnits = 0;
             Stow();
             return units;
-        }
-
-        void Stow()
-        {
-            net.Clear();
-            tension.Clear();
-            if (netLine != null) netLine.positionCount = 0;
-        }
-
-        void LateUpdate()
-        {
-            if (towed.Count == 0)
-            {
-                if (netLine != null && netLine.positionCount != 0) Stow();
-                return;
-            }
-
-            float dt = Time.deltaTime;
-            Vector3 here = transform.position;
-            Vector3 back = -transform.forward;
-
-            // ① 매듭이 어디에 있는가
-            Vector3 anchor, dir;
-            if (UseTension)
-            {
-                tension.Length = Leash;              // 짐이 줄거나 늘면 줄 길이도 따라간다
-                tension.Tick(dt, here, back, TotalUnits);
-                anchor = tension.Position;
-                dir = tension.Direction;
-            }
-            else
-            {
-                anchor = here + back * Leash;
-                dir = back;
-            }
-            anchor.y = here.y;
-
-            // ② 잔해를 그 둘레에 깐다. 실제로 얼마나 퍼졌는지를 돌려받는다
-            float spread = PlaceSlots(anchor, dir, dt);
-
-            // ③ 줄을 푼다
-            if (UseRope)
-            {
-                // 그물을 쥔 손은 플레이어 쪽 — 줄이 거기서 뻗어 나가야 끌려오는 것으로 보인다
-                Vector3 hand = here + dir * 0.4f;
-                hand.y = here.y;
-
-                // <b>공칭 반지름이 아니라 실제 퍼진 만큼을 감싼다</b> [고침 2026-10-01].
-                // DiscRadius(4.02m)로 감싸면 끌리면서 뒤처진 바깥 잔해(실측 5.56m)가
-                // 그물 밖으로 삐져나온다 — 그물이 짐을 싼 것으로 안 보인다.
-                net.Tick(dt, anchor, spread, hand);
-                net.Draw(netLine);
-            }
-            else if (netLine != null && netLine.positionCount != 0) netLine.positionCount = 0;
-        }
-
-        /// <summary>
-        /// 그물에 싸여 끌려오는 덩어리다 [지시 2026-09-22].
-        ///
-        /// 예전에는 뒤로 줄을 세웠는데, 그러면 꼬리처럼 보이고 개수가 늘수록 화면 밖으로 나갔다.
-        /// 대신 <b>해바라기 배열(피보나치 나선)</b>로 원판을 채운다 — 개수가 늘어도 반지름이
-        /// sqrt로만 자라고 간격이 고르다. 덩어리가 구멍 위를 지나가면 바깥쪽부터 빠진다.
-        ///
-        /// <b>바깥쪽일수록 늦게 따라온다</b> [지시 13번, 2026-10-01]. 전부 같은 속도로 따라오면
-        /// 뭉치가 한 장의 판때기로 움직여서, 그물이 아니라 썰매처럼 보인다.
-        /// </summary>
-        /// <returns>가장 바깥 잔해까지의 거리(m). 그물이 이만큼을 감싼다</returns>
-        float PlaceSlots(Vector3 anchor, Vector3 dir, float dt)
-        {
-            const float Golden = 2.39996323f;                 // 황금각 ≈ 137.5°
-            Vector3 right = new Vector3(dir.z, 0f, -dir.x);   // 뭉치를 줄 방향에 맞춰 돌린다
-            float inv = 1f / Mathf.Sqrt(Mathf.Max(1, towed.Count));
-            float spreadSqr = 0f, biggest = 0f;
-
-            for (int i = 0; i < towed.Count; i++)
-            {
-                Debris d = towed[i];
-                if (d == null) continue;
-
-                // 구멍이 당기는 중이면 놓아준다. 두 힘이 맞서면 잔해가 그 사이에서 떤다.
-                if (d.IsBeingSucked) continue;
-
-                float r = slotSpacing * Mathf.Sqrt(i + 0.5f);
-                float a = i * Golden;
-                Vector3 slot = anchor + (right * Mathf.Cos(a) + dir * Mathf.Sin(a)) * r;
-                slot.y = d.transform.position.y;
-
-                // 바깥쪽(i가 클수록)이 더 느리다. sqrt로 재면 0~1로 고르게 퍼진다.
-                float outer = Mathf.Sqrt(i + 0.5f) * inv;
-                float rate = followLerp * (1f - outerLag * outer);
-                d.transform.position = Vector3.Lerp(d.transform.position, slot,
-                                                    1f - Mathf.Exp(-rate * dt));
-
-                // 제곱으로 비교한다 — 잔해 500개에 Sqrt를 500번 부를 이유가 없다.
-                // 가장 큰 조각도 여기서 같이 본다. LargestRadius를 부르면 500개를 또 훑는다.
-                Vector3 off = d.transform.position - anchor; off.y = 0f;
-                if (off.sqrMagnitude > spreadSqr) spreadSqr = off.sqrMagnitude;
-                if (d.SizeRadius > biggest) biggest = d.SizeRadius;
-            }
-
-            // 조각 반경만큼 더 싸야 그물이 잔해를 스치지 않고 감싼다
-            return Mathf.Max(DiscRadius, Mathf.Sqrt(spreadSqr) + biggest);
         }
     }
 }

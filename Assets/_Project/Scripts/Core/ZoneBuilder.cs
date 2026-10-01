@@ -42,6 +42,12 @@ namespace Demo.Core
                 Debug.LogWarning($"[ZoneBuilder] 동시 구조물 {StructureCount}개 — 성능 예산 {cap} 초과. " +
                                  "CLAUDE.md 모바일 성능 예산 참조.");
 
+            // 잔해가 무엇에 걸릴지를 격자에 구워 둔다 [14번, 2026-10-01].
+            // 구역을 짓고 난 <b>뒤에</b> 해야 한다 — 콜라이더가 그때 생긴다.
+            // 건물은 한 판 내내 안 움직이므로 한 번 구우면 다시 구울 일이 없다.
+            // 부서져서 막지 않게 되는 것은 BoxCollider.enabled로 드러나고, ObstacleField가 그걸 본다.
+            Hazard.ObstacleField.Rebuild(zoneRoot.GetComponentsInChildren<BoxCollider>(true));
+
             if (zone.supports != null && zone.supports.Length > 0)
                 Debug.Log($"[ZoneBuilder] 지지 관계 {zone.supports.Length}건이 데이터에 있지만 " +
                           "붕괴 연쇄는 아직 구현 전이다 (우선순위 2 · D7).");
@@ -102,6 +108,7 @@ namespace Demo.Core
 
             Destructible.ClearRegistry();
             Debris.ClearRegistry();
+            Hazard.ObstacleField.Clear();
             StructureCount = 0;
         }
     }

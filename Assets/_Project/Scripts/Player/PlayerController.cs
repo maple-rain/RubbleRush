@@ -113,6 +113,12 @@ namespace Demo.Player
             CurrentSpeed = magnitude > 0.01f
                 ? ComputeMoveSpeed(cfg, TowLoadUnits, IsRunning) : 0f;
 
+            // 끌던 잔해가 건물에 걸려 있으면 느려진다 [14번, 2026-10-01].
+            // ComputeMoveSpeed 안에 넣지 않는다 — 저쪽은 '얼마나 많이 끄는가'의 축이고
+            // 이쪽은 '지금 걸려 있는가'의 축이다. 기획자의 감속 곡선 TODO와 섞이면 안 된다.
+            // DebrisSnag가 Slow가 아니면 배율이 1이라 아무 일도 안 일어난다.
+            if (cargo != null) CurrentSpeed *= cargo.SpeedScale;
+
             if (magnitude > 0.01f)
             {
                 dir /= dir.magnitude;
