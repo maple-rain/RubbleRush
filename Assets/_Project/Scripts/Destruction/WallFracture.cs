@@ -133,16 +133,10 @@ namespace Demo.Destruction
                  "밀림만으로는 부족하다 — 조금이라도 돌아가야 '떨어져 나오는 중'으로 읽힌다")]
         float crackTilt = 0.12f;
 
-        [Header("낙하 — 지지를 잃은 덩어리")]
-        [SerializeField, Tooltip("떨어져서 사라지기까지(초)")]
-        float fallSeconds = 0.7f;
-
-        [SerializeField, Tooltip("낙하 가속(m/s²). 실제 중력일 필요는 없다")]
-        float fallGravity = 28f;
-
-        [Header("내려앉기 — 아래층이 비면 위층이 한 층 내려온다")]
-        [SerializeField, Tooltip("내려앉는 속도(m/s). 빠를수록 '쿵' 하고 주저앉는다")]
-        float settleSpeed = 9f;
+        [Header("무너지는 동안의 움직임 — 낙하·내려앉기·구르기")]
+        [SerializeField, Tooltip("셋이 서로 물려 있어서 한 덩어리로 본다. FractureFall 주석 참조 — " +
+                                 "'위층이 아래층을 추월하면 안 된다'가 그 전부다")]
+        FractureFall fall = new FractureFall();
 
         [SerializeField, Tooltip("조각이 사라지는 순서")]
         Order removalOrder = Order.CenterOut;
@@ -164,7 +158,13 @@ namespace Demo.Destruction
         Vector3[] verts;
         int[] vertStart;              // 파편마다 정점이 시작되는 자리
         CrackOutline outline;         // 금이 간 조각의 테두리선. 앞겹에만 붙인다
-        float[] settleY;              // 조각이 지금까지 내려앉은 거리(m)
+
+        // 법선을 두 벌 든다. baseNormals는 <b>벽에 붙어 있을 때</b>의 것이고,
+        // normals는 구르는 조각만 돌려 쓴 사본이다. 원본이 없으면 한 번 구른 조각의
+        // 법선을 되돌릴 수가 없다.
+        Vector3[] baseNormals;
+        Vector3[] normals;
+
         float floorHeight;
         float pieceSize;
         bool drawOutline = true;
@@ -267,7 +267,7 @@ namespace Demo.Destruction
             Random.state = prevRandom;
 
             floorHeight = size.y / Mathf.Max(1, pattern.FloorCount);
-            settleY = new float[pattern.SeedCount];
+            fall.Reset(pattern.SeedCount);
 
             BuildMesh(size, material);
 
@@ -301,7 +301,8 @@ namespace Demo.Destruction
 
             verts = new Vector3[total];
             var uvs = new Vector2[total];
-            var normals = new Vector3[total];
+            baseNormals = new Vector3[total];
+            var normals = baseNormals;            // 아래 채우기는 원본에 한다
             var tris = new List<int>(total * 2);
 
             for (int s = 0; s < n; s++)
@@ -354,7 +355,10 @@ namespace Demo.Destruction
             mesh.vertices = verts;
             mesh.uv = uvs;
             mesh.SetTriangles(tris, 0);
-            mesh.normals = normals;
+            mesh.normals = baseNormals;
+
+            // 구르는 조각이 덮어쓸 사본. 원본을 직접 돌리면 되돌릴 기준이 없어진다.
+            this.normals = (Vector3[])baseNormals.Clone();
 
             if (outline == null && drawOutline)
                 outline = CrackOutline.Attach(transform, pattern, crackLineColor, crackLineLift);
@@ -382,10 +386,24 @@ namespace Demo.Destruction
             // 층마다 다시 돌리면 층 수만큼 그 박자가 반복된다: 세밀 → 큰 금 → 쾅 → 위층 낙하.
             //
             // 순번이 층 우선으로 정렬돼 있어서(FractureLayout.Rank) 누적 개수만 있으면 된다.
+            // <b>나누지 말고 곱한다</b> [고침 2026-09-30].
+            //
+            // 예전에는 perFloor = 1f/floors를 만들어 progress를 그걸로 나눴다. 그런데
+            // 1/3 = 0.33333334는 이진 부동소수로 정확하지 않아서, 되돌리면 1.0에 <b>한 틱
+            // 모자란</b> 0.99999994가 나온다. shatterAt이 1이라 local >= shatterAt이 거짓이 되고,
+            // <b>마지막 층이 영영 안 무너진다</b> — 금만 잔뜩 간 채로 서 있다가 화면이 닫힌다.
+            // 층 수가 3·5·6·7일 때 그랬다 (2의 거듭제곱만 우연히 멀쩡했다).
+            //
+            // 중간 층들이 멀쩡했던 이유는 경계를 탭 하나만큼 <b>넘어서</b> 지나가기 때문이다.
+            // 마지막 층만 방아쇠가 정확히 게이지 1.0에 놓여 여유분이 없다 —
+            // 기획자가 "특히 마지막 층"이라고 짚은 자리가 여기다 [지적 2026-09-30].
+            //
+            // progress * floors는 역수를 안 거치므로 1.0에서 정확히 floors가 나온다.
+            // Tap()이 "세어서 나눈다, 더해서 쌓지 않는다"로 고친 것과 같은 계열의 버그다.
             int floors = Mathf.Max(1, pattern.FloorCount);
-            float perFloor = 1f / floors;
-            int fi = Mathf.Clamp((int)(progress / perFloor), 0, floors - 1);
-            float local = Mathf.Clamp01((progress - fi * perFloor) / perFloor);
+            float scaled = progress * floors;
+            int fi = Mathf.Clamp((int)scaled, 0, floors - 1);
+            float local = Mathf.Clamp01(scaled - fi);
 
             int floorStart = pattern.LiveUpToFloor(fi);
             int inThisFloor = pattern.LiveUpToFloor(fi + 1) - floorStart;
@@ -432,29 +450,10 @@ namespace Demo.Destruction
             if (!pattern.AnyFalling && !pattern.AnySettling) return;
 
             bool changed = false;
-            if (pattern.AnyFalling) changed |= pattern.TickFall(Time.deltaTime, fallSeconds);
-            changed |= TickSettle(Time.deltaTime);
+            if (pattern.AnyFalling) changed |= pattern.TickFall(Time.deltaTime, fall.FallSeconds);
+            changed |= fall.TickSettle(Time.deltaTime, pattern, floorHeight);
 
             if (changed) Rebuild();
-        }
-
-        /// <summary>
-        /// 아래층이 비어버린 조각을 한 층씩 끌어내린다. 사라지는 게 아니라 <b>내려와서 다시 선다</b> —
-        /// 1층을 부수면 2층이 1층이 되고, 그 자리에서 다시 부술 수 있다 [지시 2026-09-22].
-        /// </summary>
-        bool TickSettle(float dt)
-        {
-            bool moved = false;
-            float step = settleSpeed * dt;
-
-            for (int s = 0; s < settleY.Length; s++)
-            {
-                float target = pattern.SettleTarget(s) * floorHeight;
-                if (Mathf.Approximately(settleY[s], target)) continue;
-                settleY[s] = Mathf.MoveTowards(settleY[s], target, step);
-                moved = true;
-            }
-            return moved;
         }
 
         /// <summary>−0.5~0.5. 이웃끼리 상관이 없어야 칸이 제각각이 된다 — 그래서 펄린이 아니라 해시다.</summary>
@@ -492,6 +491,7 @@ namespace Demo.Destruction
             float gap = Mathf.Max(seamWidth,
                                   Mathf.Lerp(crackWidthMin, crackWidthMax, localProgress) * 0.5f);
             int n = pattern.SeedCount;
+            bool anyRolling = false;
 
             for (int s = 0; s < n; s++)
             {
@@ -510,8 +510,8 @@ namespace Demo.Destruction
 
                 // 두 가지 아래 방향 이동이 겹칠 수 있다 —
                 // 지지를 잃어 떨어지는 것과, 아래층이 비어 내려앉는 것.
-                float drop = settleY[s];
-                if (pattern.Falling(s)) drop += pattern.FallDrop(s, fallGravity);
+                float drop = fall.SettleOf(s);
+                if (pattern.Falling(s)) drop += pattern.FallDrop(s, fall.Gravity);
 
                 // 금이 간 파편은 <b>움직인다</b>. 틈만 벌어지고 파편이 제자리에 붙어 있으면
                 // 눈이 그걸 균열이 아니라 그려진 윤곽선으로 읽는다.
@@ -578,6 +578,16 @@ namespace Demo.Destruction
                 float cos = Mathf.Cos(spin), sin = Mathf.Sin(spin);
                 var move = new Vector3(offX, -drop, carve);
 
+                // <b>떨어지는 조각은 공중에서 구른다</b> [지시 8번, 2026-09-30].
+                //
+                // 위 spin은 Z축 하나라 <b>화면 안에서</b> 돌 뿐이고, 판이 판인 것은 그대로다.
+                // 조각 무리가 나란히 아래로 미끄러지면 눈은 그걸 판 한 장으로 읽는다 —
+                // 이것이 "2D 이미지"로 보이던 마지막 이유다.
+                // 축을 세 방향으로 열어야 옆면이 빛을 받으며 돌아가 두께가 드러난다.
+                bool rolling = fall.Tumbles && pattern.Falling(s);
+                Quaternion roll = rolling
+                    ? fall.TumbleOf(s, pattern.FallElapsed(s)) : Quaternion.identity;
+
                 verts[v] = (Vector3)c + move;
 
                 for (int i = 0; i < e; i++)
@@ -587,9 +597,18 @@ namespace Demo.Destruction
                     Vector2 r = cell.Points[i] - c;
                     float len = r.magnitude;
                     if (len > 1e-5f) r *= 1f - shrink;      // 비율이라 파편 크기에 알아서 맞는다
-                    r = new Vector2(r.x * cos - r.y * sin, r.x * sin + r.y * cos);
-                    verts[ring + i] = (Vector3)(c + r) + move;
+
+                    // 구르는 조각은 무게중심을 축으로 <b>통째로</b> 돈다. 굴림이 켜져 있으면
+                    // 평면 회전(spin)은 쓰지 않는다 — 두 회전을 겹치면 축이 싸운다.
+                    Vector3 r3 = rolling
+                        ? roll * new Vector3(r.x, r.y, 0f)
+                        : new Vector3(r.x * cos - r.y * sin, r.x * sin + r.y * cos, 0f);
+                    verts[ring + i] = (Vector3)c + r3 + move;
                 }
+
+                // 두께를 미는 방향도 같이 돈다. 앞면만 돌리고 이것을 +Z로 두면
+                // 조각이 <b>찢어진다</b> — 앞판은 굴러가는데 옆벽은 제자리를 본다.
+                Vector3 depthDir = rolling ? roll * Vector3.forward : Vector3.forward;
 
                 for (int i = 0; i < e; i++)
                 {
@@ -598,13 +617,34 @@ namespace Demo.Destruction
                     // 옆면은 <b>건너편이 없어진 변에만</b> 편다. 살아 있으면 넓이 0으로 접어
                     // 채움 비용을 없앤다 — 정점 수는 어차피 고정이다.
                     // 앞면이 carve만큼 물러났으므로 옆벽은 그만큼 짧다 — 뒷면은 제자리다.
-                    Vector3 d = Vector3.forward * Mathf.Max(0f, Side(cell.Neighbour[i]) - carve);
+                    Vector3 d = depthDir * Mathf.Max(0f, Side(cell.Neighbour[i]) - carve);
                     int o = side + i * 4;
                     verts[o] = a; verts[o + 1] = a + d; verts[o + 2] = b + d; verts[o + 3] = b;
+                }
+
+                // <b>법선도 같이 돌려야 빛이 따라온다.</b> BuildMesh가 쓴 법선은 조각이
+                // 벽에 붙어 있을 때 기준이라, 구르는 조각에 그대로 두면 아무리 돌려도
+                // 밝기가 안 변한다 — 구르게 만든 이유가 통째로 사라진다.
+                //
+                // 되돌릴 걱정은 없다. 떨어지는 조각이 낙하를 끝내는 길은 Gone 하나뿐이고
+                // (TickFall), 그때는 정점이 한 점으로 접혀 아예 안 보인다.
+                if (rolling)
+                {
+                    for (int k = vertStart[s]; k < vertStart[s + 1]; k++)
+                        normals[k] = roll * baseNormals[k];
+                    anyRolling = true;
                 }
             }
 
             mesh.vertices = verts;
+
+            // 구르는 것이 있을 때만 법선을 올린다. 평소에는 BuildMesh가 쓴 것 그대로다.
+            //
+            // <b>되돌리는 길은 필요 없다.</b> 구르기를 멈추는 길은 Gone 하나뿐이고(TickFall),
+            // 그때 정점이 한 점으로 접혀 아예 안 그려진다. 그러니 normals에 남는 돌아간 법선은
+            // 전부 <b>보이지 않는 조각</b>의 것이다. 안 구르는 자리는 BuildMesh가 넣은 값 그대로다.
+            if (anyRolling) mesh.normals = normals;
+
             mesh.RecalculateBounds();
 
             if (outline != null) outline.Refresh(pattern, verts, vertStart);

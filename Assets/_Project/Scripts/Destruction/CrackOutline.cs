@@ -95,7 +95,16 @@ namespace Demo.Destruction
                 int o = start[s];
 
                 // 사라진 조각은 선도 없다. 정점을 한 점으로 접어 두면 선이 안 그려진다.
-                bool show = !pattern.Gone(s) && (pattern.Cracking(s) || pattern.Falling(s));
+                //
+                // <b>떨어지는 조각에는 선을 안 그린다</b> [지시 8번, 2026-09-30].
+                // 이 선은 z-파이팅을 피하려고 카메라 쪽으로 띄워 놨다 — 그래서 <b>깊이 검사를
+                // 이기고</b> 앞에 뭐가 있든 그 위에 찍힌다. 공중에 뜬 덩어리에 그리면
+                // 화면에 남는 것이 3D 조각이 아니라 <b>검은 선 그림 한 장</b>이 된다.
+                // 특히 마지막 층은 뒤에 아무것도 없어서 선만 허공에 떠 있었다.
+                //
+                // 이 파일 첫머리가 적어 둔 대로, 선은 <b>금이 간 자리</b>를 가리키는 것이다.
+                // 떨어져 나온 덩어리는 금이 아니다.
+                bool show = !pattern.Gone(s) && pattern.Cracking(s);
                 if (!show)
                 {
                     for (int i = 0; i < e; i++) verts[o + i] = Vector3.zero;

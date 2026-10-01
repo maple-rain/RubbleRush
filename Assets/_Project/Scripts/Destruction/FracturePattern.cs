@@ -52,6 +52,10 @@ namespace Demo.Destruction
         public float FallDrop(int seed, float gravity) =>
             fallElapsed[seed] < 0f ? 0f : 0.5f * gravity * fallElapsed[seed] * fallElapsed[seed];
 
+        /// <summary>떨어진 지 몇 초인가. 안 떨어지는 중이면 0.
+        /// 구르는 각도가 이 시간에 비례한다 (<see cref="FractureFall.TumbleOf"/>).</summary>
+        public float FallElapsed(int seed) => Mathf.Max(0f, fallElapsed[seed]);
+
         /// <summary>이 조각이 속한 층.</summary>
         public int FloorOf(int seed) => layout.SeedFloor[seed];
 
