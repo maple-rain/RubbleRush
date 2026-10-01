@@ -24,8 +24,17 @@ namespace Demo.Player
         [SerializeField, Tooltip("대상이 있는 레이어")]
         LayerMask targetMask = ~0;
 
-        [SerializeField, Tooltip("이 속도 아래여야 상호작용이 뜬다. 지나가며 눌리는 것을 막는다")]
-        float stillSpeedThreshold = 0.6f;
+        [SerializeField, Tooltip("이 속도 아래여야 상호작용이 뜬다. 지나가며 눌리는 것을 막는다.\n" +
+                 "<b>0.6은 어떤 속도로도 만족할 수 없는 값이었다</b> [고침 2026-10-01].\n" +
+                 "PlayerController가 입력 크기를 무시하고 0 아니면 전속력을 내기 때문이다 — " +
+                 "실측하면 정지 0.00 / 걷기 2.24 / 달리기 6.00 m/s 셋뿐이고, " +
+                 "0이 아닌 가장 느린 값이 문턱의 3.7배다. 그래서 '천천히 다가가면 된다'가 아니라 " +
+                 "<b>완전히 멈춰야만</b> 열렸고, 막히는 동안에는 프롬프트도 안 떠서 " +
+                 "플레이어가 E를 누를 수 있는지조차 알 수 없었다 [지적 2026-10-01].\n" +
+                 "3.0은 걷기(2.24)는 통과시키고 달리기(6.00)는 막는 값이다 [제안·미승인] — " +
+                 "'지나가며 눌리는 것을 막는다'는 원래 의도가 그것이다. " +
+                 "걷기에서도 막고 싶으면 2.0 아래로, 달리기에서도 열려면 6.1 위로 둔다")]
+        float stillSpeedThreshold = 3.0f;
 
         readonly Collider[] hits = new Collider[16];
 
