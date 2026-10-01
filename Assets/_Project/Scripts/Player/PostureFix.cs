@@ -78,7 +78,22 @@ namespace Demo.Player
                  "로봇 머리가 큰 상자라 이 각이 '고개를 떨구고 있다'로 아주 크게 읽힌다")]
         [SerializeField, Range(-20f, 20f)] float headPitch = 6.0f;
 
+        [Tooltip("<b>골반과 어깨 사이</b>에 남은 비틀림을 되돌린다(도) [제안·미승인 2026-10-01].\n" +
+                 "골반을 펴고 나서도 어깨선이 걷기 3.02도 / 달리기 2.71도 틀어져 있었다. " +
+                 "골반선은 0 근처까지 갔으므로 이 몫은 <b>척추 자신의 비틀림</b>이다.\n" +
+                 "값은 <b>어깨에서의 총량</b>이고, Spine·Spine1·Spine2 <b>세 마디에 나눠</b> 건다. " +
+                 "한 마디에 몰면 거기만 꺾여 몸통에 단차가 보인다 — 실제 척추도 축 회전을 " +
+                 "여러 마디가 나눠 낸다.\n" +
+                 "비틀림이지 <b>휨이 아니다</b> — 각 마디를 제 축으로만 돌리므로 측만증처럼 " +
+                 "옆으로 휘지 않는다. 실측으로 확인했다: 이 값을 0에서 4.5까지 올려도 " +
+                 "척추가 Hips-Neck 직선에서 옆으로 벗어난 양이 0.31~0.44mm로 <b>안 커진다</b>.\n" +
+                 "값은 후보를 쓸어서 골랐다 — 어깨선 좌우틀림이 " +
+                 "0일 때 2.86/2.67, 1.5일 때 1.50/1.68, <b>3일 때 −0.19/−0.01</b>, 4.5일 때 −1.71/−1.44 " +
+                 "(걷기/달리기)")]
+        [SerializeField, Range(-15f, 15f)] float spineTwist = 3.0f;
+
         Transform hips, neck, head;
+        Transform spine, spine1, spine2;
         bool bound;
 
         /// <summary>
@@ -88,14 +103,36 @@ namespace Demo.Player
         public void Bind(Transform root)
         {
             hips = null; neck = null; head = null;
+            spine = null; spine1 = null; spine2 = null;
             if (root != null)
                 foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
-                {
-                    if (hips == null && t.name == "Hips") hips = t;
-                    else if (neck == null && t.name == "Neck") neck = t;
-                    else if (head == null && t.name == "Head") head = t;
-                }
+                    switch (t.name)
+                    {
+                        case "Hips":   if (hips   == null) hips   = t; break;
+                        case "Neck":   if (neck   == null) neck   = t; break;
+                        case "Head":   if (head   == null) head   = t; break;
+                        case "Spine":  if (spine  == null) spine  = t; break;
+                        case "Spine1": if (spine1 == null) spine1 = t; break;
+                        case "Spine2": if (spine2 == null) spine2 = t; break;
+                    }
             bound = hips != null || head != null;
+        }
+
+        /// <summary>
+        /// 지금 척추가 향한 방향. <b>이 축으로만 돌려야 휨이 안 생긴다</b> —
+        /// 월드 수직축으로 돌리면 앞으로 숙인 몸이 옆으로 쓸려 나간다.
+        /// </summary>
+        Vector3 SpineAxis(Vector3 fallback)
+        {
+            if (hips == null || neck == null) return fallback;
+            Vector3 d = neck.position - hips.position;
+            return d.sqrMagnitude > 1e-6f ? d.normalized : fallback;
+        }
+
+        /// <summary>제 자리에서 축을 중심으로 비튼다. 자식이 따라오므로 효과가 쌓인다.</summary>
+        static void Twist(Transform t, Vector3 axis, float degrees)
+        {
+            if (t != null) t.rotation = Quaternion.AngleAxis(degrees, axis) * t.rotation;
         }
 
         public bool Ready => bound && enabled;
@@ -142,16 +179,33 @@ namespace Demo.Player
                 //
                 // 척추 축으로 돌리면 척추 방향 자체가 안 움직이므로 기울기가 생길 수 없다.
                 // "몸을 틀었다"는 말뜻도 수직축이 아니라 <b>제 몸통 축</b>을 중심으로 돈 것이다.
-                Vector3 twistAxis = up;
-                if (neck != null)
-                {
-                    Vector3 spine = neck.position - hips.position;   // 돌리기 <b>전에</b> 잰다
-                    if (spine.sqrMagnitude > 1e-6f) twistAxis = spine.normalized;
-                }
-
-                hips.rotation = Quaternion.AngleAxis(torsoYaw * yawScale * k, twistAxis)
+                hips.rotation = Quaternion.AngleAxis(torsoYaw * yawScale * k, SpineAxis(up))
                               * Quaternion.AngleAxis(torsoLean * leanScale * k, fwd)
                               * hips.rotation;
+            }
+
+            // 골반을 펴고도 <b>골반과 어깨 사이</b>에 비틀림이 남는다 [실측 2026-10-01].
+            // 골반선은 0 근처로 가는데 어깨선이 걷기 3.02 / 달리기 2.71도 남았다 —
+            // 골반이 아니라 척추 자신이 비틀려 있다는 뜻이다.
+            //
+            // 세 마디에 나눠 거는 이유: 한 마디에 몰면 거기만 꺾여 몸통에 단차가 보인다.
+            // 자식이 부모의 회전을 물려받으므로 1도씩 세 번이면 어깨에서 3도가 된다.
+            //
+            // 축은 <b>골반을 돌린 뒤에 다시 잰다</b> — 기울기 보정이 목 위치를 옮겼기 때문이다.
+            if (spineTwist != 0f && m > 0.0001f)
+            {
+                // 움직이면 상수로 건다. 실측이 걷기 2.86도 / 달리기 2.67도로 <b>거의 같았다</b> —
+                // 속도에 따라 커지는 골반 쪽(−5.8 / −8.8)과는 모양이 다르다.
+                // 정지는 어깨선이 1.9도로 이미 작아서 건드리지 않는다.
+                //
+                // 0.3이라는 문턱 자체는 <b>잰 값이 아니다</b>. 양 끝(정지 0, 걷기부터 전부)만
+                // 실측이고, 그 사이를 어떻게 이을지는 튀지 않게 하려는 보간일 뿐이다.
+                float twistScale = Mathf.Clamp01(m / 0.3f);
+                float per = spineTwist * twistScale * k / 3f;
+                Vector3 ax = SpineAxis(up);
+                Twist(spine, ax, per);
+                Twist(spine1, ax, per);
+                Twist(spine2, ax, per);
             }
 
             // 머리. 몸통과 달리 멈춰 있을 때도 틀어져 있어서 늘 같은 몫을 뺀다.
