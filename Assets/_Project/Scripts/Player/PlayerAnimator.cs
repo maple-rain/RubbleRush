@@ -86,6 +86,10 @@ namespace Demo.Player
         [SerializeField, Tooltip("연타 감지와 배속. 자세한 설명은 PunchRush.cs에 있다")]
         PunchRush rush = new PunchRush();
 
+        [Header("자세 — 클립에 구워진 쏠림 되돌리기 [지시 10번, 2026-10-01]")]
+        [SerializeField, Tooltip("실측한 상수 쏠림을 뺀다. 자세한 설명과 수치 근거는 PostureFix.cs에 있다")]
+        PostureFix posture = new PostureFix();
+
         static readonly int SpeedId = Animator.StringToHash("Speed");
         static readonly int PunchId = Animator.StringToHash("Punch");
         static readonly int WalkRateId = Animator.StringToHash("WalkRate");
@@ -93,6 +97,7 @@ namespace Demo.Player
         static readonly int PunchRateId = Animator.StringToHash("PunchRate");
 
         Animator anim;
+        StrikeArmRig armRig;       // 붙어 있는 동안에는 자세 보정을 건너뛴다
         int upperLayer = -1;
         int twistLayer = -1;
         float blend;
@@ -167,6 +172,24 @@ namespace Demo.Player
             // 상체는 늘 켜 둔다. 컨트롤러의 defaultWeight도 1이지만, 이전 버전이 0으로
             // 저장해 둔 컨트롤러를 만나도 같게 굴러가도록 여기서 한 번 더 못 박는다.
             if (upperLayer >= 0) anim.SetLayerWeight(upperLayer, 1f);
+
+            // 뼈를 한 번만 찾아 둔다 (규칙 5).
+            posture.Bind(transform);
+            armRig = GetComponentInParent<StrikeArmRig>();
+        }
+
+        /// <summary>
+        /// 자세 보정은 <b>애니메이터가 뼈를 쓴 뒤에</b> 들어가야 한다 — 그래서 LateUpdate다.
+        /// Update(이 클래스의 나머지)에서 하면 같은 프레임에 덮어써져 아무 일도 안 일어난다.
+        ///
+        /// 파괴 화면에서는 건너뛴다. <see cref="StrikeArmRig"/>이 미리 잰 고정 오프셋으로
+        /// 주먹을 과녁에 박아 두는데(어긋남 0.0005), Hips를 돌리면 그 조준이 통째로 틀어진다.
+        /// </summary>
+        void LateUpdate()
+        {
+            if (!posture.Ready) return;
+            if (armRig != null && armRig.Attached) return;
+            posture.Apply(player != null ? player.transform : transform, blend);
         }
 
         /// <summary>한 대 때렸다. <see cref="Destruction.DestructionFX"/>가 타격마다 부른다.</summary>
