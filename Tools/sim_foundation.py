@@ -181,6 +181,12 @@ class Sim:
                 per = b.break_time                   # 빨리 부서지는 것부터
             elif self.policy == 'farthest':
                 per = -d1                            # 먼 것부터 (최악에 가까운 대조군)
+            elif self.policy == 'ladder':
+                # <b>기획 확정 설계</b> [2026-09-22 · 재확인 2026-10-02].
+                # 구멍 단계가 오르면 한 종류가 새로 열리고, 그 종류를 부수는 것이 이득이도록
+                # 수치를 맞춘다. 그러면 플레이어는 <b>열린 것 중 제일 큰 종류</b>를 치게 된다.
+                # 같은 종류끼리는 가까운 것부터 — 그건 거리 말고 고를 근거가 없다.
+                per = -b.tier * 10000.0 + d1
             else:
                 raise SystemExit('모르는 정책: %s' % self.policy)
 

@@ -181,12 +181,15 @@ _VIS = {}
 
 # ── 세계 ──────────────────────────────────────────────────────────────────────
 class Building:
-    __slots__ = ('bid', 'x', 'z', 'yaw', 'kind', 'sx', 'sz', 'break_time',
-                 'debris_n', 'scatter', 'debris_r', 'rect_intact', 'rect_rubble', 'dead', 'dead_at')
+    __slots__ = ('bid', 'x', 'z', 'yaw', 'kind', 'tier', 'sx', 'sz', 'break_time',
+                 'debris_n', 'size_class', 'scatter', 'debris_r',
+                 'rect_intact', 'rect_rubble', 'dead', 'dead_at')
 
     def __init__(self, s, t):
         self.bid, self.x, self.z, self.yaw = s['id'], s['x'], s['z'], s['yaw']
         self.kind = s['data']
+        self.tier = t['tier']                    # 0=제일 작은 것 … 4=제일 큰 것
+        self.size_class = t['debrisSizeClass']   # 잔해 1개가 주는 단위
         cs = t['colliderSize']
         self.sx, self.sz = cs[0], cs[2]
         self.break_time = t['breakTime']
