@@ -19,13 +19,22 @@ from sim_world import (CFG, PLAYER_R, RUBBLE_SHRINK, Rect, path_len,
 # <b>player와 debris가 갈린다</b> [고침 2026-10-02]. C_발판은 콜라이더를 켜 둔 채
 # stepOffset만 올리는 것이라, <b>플레이어는 넘어가지만 짐은 걸린다.</b>
 # C#에서 확인한 사실이고 (ObstacleField는 box.enabled만 본다), 처음 모형은 이걸 놓쳤다.
+# 내가 지어낸 모형 상수 [사견 표시 2026-10-02]. 갈아 끼울 수 있게 모듈 수준에 둔다 —
+# sim_sensitivity.py가 이것들을 쓸어서 결론이 여기 기대는지 본다.
+_LOOP_MARGIN = 0.5      # 고리를 잔해 흩어짐보다 얼마나 더 크게 그리는가(m)
+_STAND_GAP = 2.0        # 건물 표면에서 얼마나 떨어져 서서 때리는가(m)
+
 OPTIONS = {
     'A_그대로':   dict(player=False, debris=False, cable=False, decay=None,
                       desc='지금 그대로. 토대는 장식이고 아무것도 안 막는다'),
     'B_장애물':   dict(player=True,  debris=True,  cable=False, decay=None,
                       desc='콜라이더를 켠다. 플레이어도 짐도 못 지나간다'),
-    'C_발판':     dict(player=False, debris=True,  cable=False, decay=None,
-                      desc='올라설 수 있게 한다(stepOffset 0.45). 플레이어는 넘지만 짐은 걸린다'),
+    # '발판'은 해석이 둘이다 — 어느 쪽인지는 기획 결정이다 [사견 분리 2026-10-02].
+    # GameConfig.platformBlocksCargo가 이 둘을 가른다.
+    'C_발판_짐걸림': dict(player=False, debris=True,  cable=False, decay=None,
+                      desc='올라설 수 있다. 플레이어는 넘지만 짐은 턱에 걸린다 (platformBlocksCargo 켬)'),
+    'C_발판_짐통과': dict(player=False, debris=False, cable=False, decay=None,
+                      desc='올라설 수 있다. 플레이어도 짐도 넘어간다 (platformBlocksCargo 끔)'),
     'D_케이블':   dict(player=False, debris=False, cable=True,  decay=None,
                       desc='케이블 궤적만 끊긴다. 걸어서도 짐도 지나간다'),
     'E_치움':     dict(player=True,  debris=True,  cable=False, decay=20.0,
@@ -104,7 +113,7 @@ class Sim:
         tx = (b.sx * 0.5) / abs(lx) if abs(lx) > 1e-6 else 1e9
         tz = (b.sz * 0.5) / abs(lz) if abs(lz) > 1e-6 else 1e9
         surf = min(tx, tz)
-        reach = surf + min(CFG['breakerRange'] - 1.0, 2.0)
+        reach = surf + min(CFG['breakerRange'] - 1.0, _STAND_GAP)
         return (b.x + dx * reach, b.z + dz * reach)
 
     def loop_cost(self, b):
@@ -112,7 +121,7 @@ class Sim:
 
         고리 반지름이 케이블 상한(38.5m / 2π = 6.13m)을 넘으면 한 번에 못 싼다.
         토대가 케이블(또는 발)을 막으면 고리가 토대 바깥으로 밀려난다."""
-        r = b.scatter + 0.5
+        r = b.scatter + _LOOP_MARGIN
         floor = 0.0
         if b.dead and (self.o['cable'] or self.o['debris']):
             floor = b.circum + PLAYER_R
@@ -133,11 +142,17 @@ class Sim:
         r, _ = hole_radius(self.xp)
         return b.debris_r < r
 
-    def pick(self):
-        """다음에 칠 건물. 단위당 드는 시간이 제일 싼 것.
+    # 다음에 칠 건물을 어떻게 고를 것인가. <b>이것은 내 추측이지 기획 결정이 아니다</b>
+    # [사견 표시 2026-10-02]. 선택지 사이의 차이가 '정책 때문'인지 '지도 때문'인지를
+    # 가르려면 정책을 바꿔 가며 같은 비교를 돌려 봐야 한다. 그래서 갈아 끼울 수 있게 뒀다.
+    policy = 'greedy'
 
-        탐욕이다 — 최적해가 아니다. <b>다섯 선택지에 똑같이 적용되므로</b>
-        선택지 사이의 차이는 정책이 아니라 지도에서 온다."""
+    def pick(self):
+        """다음에 칠 건물. 기본은 단위당 드는 시간이 제일 싼 것(탐욕).
+
+        <b>최적해가 아니고, 사람이 그렇게 논다는 근거도 없다.</b>
+        다섯 선택지에 똑같이 적용되므로 선택지 사이의 <i>차이</i>는 정책에서 오지 않는다 —
+        그 주장이 맞는지는 <c>sim_sensitivity.py</c>가 정책을 바꿔 가며 확인한다."""
         best, best_cost = None, float('inf')
         rects_now = self.player_rects()
         gen_now = self.obstacle_gen()
@@ -155,7 +170,20 @@ class Sim:
             if v <= 0:
                 continue
             cost = (d1 + d2) / CFG['moveSpeedBase'] + b.break_time + b.scatter * 2 * math.pi / CFG['moveSpeedBase']
-            per = cost / v
+
+            if self.policy == 'greedy':
+                per = cost / v                       # 단위당 시간이 싼 것
+            elif self.policy == 'nearest':
+                per = d1                             # 가까운 것부터
+            elif self.policy == 'biggest':
+                per = -v                             # 많이 나오는 것부터
+            elif self.policy == 'quickest':
+                per = b.break_time                   # 빨리 부서지는 것부터
+            elif self.policy == 'farthest':
+                per = -d1                            # 먼 것부터 (최악에 가까운 대조군)
+            else:
+                raise SystemExit('모르는 정책: %s' % self.policy)
+
             if per < best_cost:
                 best, best_cost = b, per
         return best

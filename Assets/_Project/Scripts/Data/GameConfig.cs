@@ -171,6 +171,15 @@ namespace Demo.Data
                  "토대 높이 0.40보다 커야 올라탄다. 실측: 0.30은 막히고 0.45는 넘어간다")]
         public float platformStepOffset = 0.45f;
 
+        [Tooltip("Platform에서 <끌려오는 잔해>도 토대에 걸리는가 [11번 · 해석이 갈리는 자리].\n\n" +
+                 "'발판'을 어떻게 읽느냐에 따라 둘 다 말이 된다:\n" +
+                 "  켬 — 플레이어는 올라서고 짐은 걸린다. 턱에 짐이 걸리는 쪽\n" +
+                 "  끔 — 플레이어도 짐도 넘어간다. 케이블이 짐을 살짝 들어 넘긴다는 쪽\n\n" +
+                 "실측 차이가 크다: 켜면 클리어 +6.6%/걸림 69%, 끄면 +0.0%/걸림 37%.\n" +
+                 "<b>어느 쪽인지는 기획 결정이다</b> — AI가 켬으로 두고 '발판은 공짜가 아니다'라고 " +
+                 "보고한 적이 있는데, 그건 측정 결과가 아니라 해석이었다 [2026-10-02]")]
+        public bool platformBlocksCargo = true;
+
         /// <summary>견인량에 따른 이동 속도. 곡선의 모양은 PlayerController가 정한다.</summary>
         public float SpeedFloor => moveSpeedMin;
 

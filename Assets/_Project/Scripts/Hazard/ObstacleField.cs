@@ -183,6 +183,19 @@ namespace Demo.Hazard
         static int Key(int x, int z) => (x * 73856093) ^ (z * 19349663);
 
         /// <summary>
+        /// 이 콜라이더가 지금 <b>토대</b>인가 (= 건물이 이미 잔해가 됐는가).
+        ///
+        /// 같은 BoxCollider가 건물이었다가 토대가 되므로 굽는 시점에는 구분할 수가 없다.
+        /// <see cref="Destruction.Destructible"/>의 조회표를 쓴다 — 칸 안의 후보에만 묻고,
+        /// 후보는 보통 0~2개라 질의당 사전 조회가 그만큼이다.
+        /// </summary>
+        static bool IsFoundation(BoxCollider c)
+        {
+            var d = Destruction.Destructible.From(c);
+            return d != null && d.Current == Destruction.Destructible.State.Rubble;
+        }
+
+        /// <summary>
         /// <paramref name="p"/>를 중심으로 한 반지름 <paramref name="radius"/>의 원이
         /// 켜져 있는 장애물과 겹치는가.
         /// </summary>
@@ -192,6 +205,16 @@ namespace Demo.Hazard
         {
             push = Vector3.zero;
             if (!s_ready) return false;
+
+            // <b>'발판'의 해석이 갈리는 자리</b> [11번, 2026-10-02].
+            // Platform은 올라서려면 딛을 것이 있어야 해서 콜라이더를 켜 둔다. 그런데
+            // <i>끌려오는 짐</i>도 거기 걸려야 하는지는 기하가 아니라 기획이 정할 일이다.
+            // AI가 "걸린다"로 두고 "발판은 공짜가 아니었다"고 보고한 적이 있는데,
+            // 그건 측정이 아니라 해석이었다. 이제 설정으로 뺐다.
+            var cfg = Core.GameConfigRef.Current;
+            bool skipFoundations = cfg != null &&
+                                   cfg.foundationRule == Data.GameConfig.FoundationRule.Platform &&
+                                   !cfg.platformBlocksCargo;
 
             int gx = Mathf.FloorToInt(p.x / CellSize), gz = Mathf.FloorToInt(p.z / CellSize);
 
@@ -208,6 +231,7 @@ namespace Demo.Hazard
                     {
                         Box b = s_boxes[cell[i]];
                         if (b.src == null || !b.src.enabled) continue;   // 잔해가 된 건물은 안 막는다
+                        if (skipFoundations && IsFoundation(b.src)) continue;
 
                         // 상자의 로컬 좌표로 내려서 본다 — 회전한 사각형 판정이 축정렬이 된다
                         float dxw = p.x - b.cx, dzw = p.z - b.cz;
