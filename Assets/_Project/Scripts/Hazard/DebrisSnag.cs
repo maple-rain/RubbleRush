@@ -49,7 +49,13 @@ namespace Demo.Hazard
                  "1이면 보이는 크기 그대로. 작게 하면 스칠 때는 안 걸린다")]
         float radiusScale = 0.8f;
 
+        [SerializeField, Range(0f, 5f), Tooltip("한 번 터진 뒤 다시 터질 때까지의 쉬는 시간(초).\n" +
+                 "0이면 접촉이 이어지는 동안 유예가 계속 다시 차서 연달아 터진다 — " +
+                 "실측에서 건물 한 채를 스치는 데 6번 터져 20개 중 18개를 잃었다 [고침 2026-10-02]")]
+        float cooldownSeconds = 1.5f;
+
         float stuckFor;
+        float cooldownLeft;
 
         /// <summary>이번 프레임에 걸린 조각 수. 실측·연출이 읽는다.</summary>
         public int SnaggedNow { get; private set; }
@@ -69,13 +75,18 @@ namespace Demo.Hazard
         public float SpeedScale =>
             mode == Response.Slow && SnaggedNow > 0 ? slowFactor : 1f;
 
-        /// <summary>DropOff·Snap이 터질 조건을 채웠는가.</summary>
+        /// <summary>DropOff·Snap이 터질 조건을 채웠는가. 쉬는 중이면 안 터진다.</summary>
         public bool Triggered =>
-            (mode == Response.DropOff || mode == Response.Snap) && stuckFor >= graceSeconds;
+            (mode == Response.DropOff || mode == Response.Snap) &&
+            cooldownLeft <= 0f && stuckFor >= graceSeconds;
+
+        /// <summary>다시 터지기까지 남은 시간(초). 0이면 지금 터질 수 있다.</summary>
+        public float CooldownLeft => cooldownLeft;
 
         public void Reset()
         {
             stuckFor = 0f;
+            cooldownLeft = 0f;
             SnaggedNow = 0;
         }
 
@@ -118,6 +129,8 @@ namespace Demo.Hazard
         /// <param name="dt">프레임 시간</param>
         public void End(float dt)
         {
+            if (cooldownLeft > 0f) cooldownLeft -= dt;
+
             if (SnaggedNow > 0)
             {
                 if (stuckFor <= 0f) SnagEvents++;
@@ -126,11 +139,12 @@ namespace Demo.Hazard
             else stuckFor = 0f;
         }
 
-        /// <summary>터진 뒤 호출한다. 잃은 수를 기록하고 시계를 되돌린다.</summary>
+        /// <summary>터진 뒤 호출한다. 잃은 수를 기록하고 시계를 되돌린 뒤 쉬는 시간을 건다.</summary>
         public void Consume(int lost)
         {
             LostPieces += lost;
             stuckFor = 0f;
+            cooldownLeft = cooldownSeconds;
         }
     }
 }

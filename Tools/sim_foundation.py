@@ -12,16 +12,23 @@ from sim_world import (CFG, PLAYER_R, RUBBLE_SHRINK, Rect, path_len,
 
 # ── 선택지 ────────────────────────────────────────────────────────────────────
 # 각 선택지는 "토대가 무엇을 막는가"만 다르다. 정책·지도·수치는 전부 같다.
+# player  — 걸어서 막히는가 (Destructible의 BoxCollider가 켜져 있고 stepOffset보다 높은가)
+# debris  — 끌려오던 잔해가 걸리는가 (ObstacleField가 집어 드는가 = 콜라이더가 켜져 있는가)
+# cable   — 케이블 궤적이 끊기는가 (CableController가 ObstacleField.BlocksCable에 묻는가)
+#
+# <b>player와 debris가 갈린다</b> [고침 2026-10-02]. C_발판은 콜라이더를 켜 둔 채
+# stepOffset만 올리는 것이라, <b>플레이어는 넘어가지만 짐은 걸린다.</b>
+# C#에서 확인한 사실이고 (ObstacleField는 box.enabled만 본다), 처음 모형은 이걸 놓쳤다.
 OPTIONS = {
-    'A_그대로':   dict(player=False, cable=False, decay=None,
+    'A_그대로':   dict(player=False, debris=False, cable=False, decay=None,
                       desc='지금 그대로. 토대는 장식이고 아무것도 안 막는다'),
-    'B_장애물':   dict(player=True,  cable=False, decay=None,
-                      desc='토대 콜라이더를 켠다. 플레이어가 못 지나간다'),
-    'C_발판':     dict(player=False, cable=False, decay=None, step=True,
-                      desc='올라설 수 있게 한다 (stepOffset 0.30→0.45). 길은 안 막는다'),
-    'D_케이블':   dict(player=False, cable=True,  decay=None,
-                      desc='케이블만 못 넘는다. 걸어서는 지나간다'),
-    'E_치움':     dict(player=True,  cable=False, decay=20.0,
+    'B_장애물':   dict(player=True,  debris=True,  cable=False, decay=None,
+                      desc='콜라이더를 켠다. 플레이어도 짐도 못 지나간다'),
+    'C_발판':     dict(player=False, debris=True,  cable=False, decay=None,
+                      desc='올라설 수 있게 한다(stepOffset 0.45). 플레이어는 넘지만 짐은 걸린다'),
+    'D_케이블':   dict(player=False, debris=False, cable=True,  decay=None,
+                      desc='케이블 궤적만 끊긴다. 걸어서도 짐도 지나간다'),
+    'E_치움':     dict(player=True,  debris=True,  cable=False, decay=20.0,
                       desc='막지만 20초 뒤 사라진다'),
 }
 
@@ -48,21 +55,31 @@ class Sim:
     def obstacle_gen(self):
         """장애물 집합의 지문. 이게 같으면 가시성 그래프를 다시 안 짓는다."""
         if self.o['decay'] is None:
-            return (self.name, tuple(b.dead for b in self.bs))
-        return (self.name, tuple((b.dead and (self.t - b.dead_at) < self.o['decay'])
-                                 for b in self.bs))
+            return (self.name, 'p', tuple(b.dead for b in self.bs))
+        return (self.name, 'p', tuple((b.dead and (self.t - b.dead_at) < self.o['decay'])
+                                      for b in self.bs))
 
-    def player_rects(self, exclude=None):
+    def rects(self, key, exclude=None):
+        """지금 <paramref name="key"/>를 막는 사각형들. key는 'player' 또는 'debris'.
+
+        온전한 건물은 둘 다 막는다. 토대는 규칙에 따라 갈린다 —
+        C_발판에서는 플레이어만 넘어가고 짐은 걸린다."""
         out = []
         for b in self.bs:
             if b is exclude:
                 continue
             if not b.dead:
                 out.append(b.rect_intact)
-            elif self.o['player']:
+            elif self.o[key]:
                 if self.o['decay'] is None or (self.t - b.dead_at) < self.o['decay']:
                     out.append(b.rect_rubble)
         return out
+
+    def player_rects(self, exclude=None):
+        return self.rects('player', exclude)
+
+    def debris_rects(self, exclude=None):
+        return self.rects('debris', exclude)
 
     def go(self, target, exclude=None):
         """목적지까지 걸어간다. 직선 거리도 같이 재서 우회분을 뽑는다."""
@@ -97,7 +114,7 @@ class Sim:
         토대가 케이블(또는 발)을 막으면 고리가 토대 바깥으로 밀려난다."""
         r = b.scatter + 0.5
         floor = 0.0
-        if b.dead and (self.o['cable'] or self.o['player']):
+        if b.dead and (self.o['cable'] or self.o['debris']):
             floor = b.circum + PLAYER_R
         r = max(r, floor)
         rmax = CFG['cableMaxLength'] / (2 * math.pi)

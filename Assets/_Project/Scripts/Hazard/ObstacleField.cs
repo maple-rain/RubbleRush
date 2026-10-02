@@ -50,6 +50,15 @@ namespace Demo.Hazard
         static readonly Dictionary<int, List<int>> s_grid = new Dictionary<int, List<int>>(256);
         static bool s_ready;
 
+        /// <summary>
+        /// 토대 발자국. <b>콜라이더와 별개로</b> 들고 있다 [11번 CableOnly, 2026-10-02].
+        ///
+        /// CableOnly는 "걸어서는 지나가지만 케이블은 못 넘는다"다. 즉 콜라이더가 꺼져 있는데
+        /// 케이블만 막혀야 하므로, <see cref="s_boxes"/>의 <c>src.enabled</c>로는 표현할 수가 없다.
+        /// 그래서 <see cref="Destruction.Destructible"/>이 토대가 될 때마다 여기에 따로 적는다.
+        /// </summary>
+        static readonly List<Box> s_foundations = new List<Box>(64);
+
         /// <summary>격자가 서 있는가. 안 서 있으면 모든 질의가 '안 막힘'을 돌려준다.</summary>
         public static bool Ready => s_ready;
 
@@ -111,7 +120,64 @@ namespace Demo.Hazard
         {
             s_boxes.Clear();
             s_grid.Clear();
+            s_foundations.Clear();
             s_ready = false;
+        }
+
+        /// <summary>토대 하나를 등록한다. <see cref="Destruction.Destructible"/>이 잔해가 될 때 부른다.</summary>
+        public static void AddFoundation(Vector3 center, float halfX, float halfZ, float yawDegrees)
+        {
+            float a = yawDegrees * Mathf.Deg2Rad;
+            s_foundations.Add(new Box
+            {
+                cx = center.x, cz = center.z,
+                hx = halfX, hz = halfZ,
+                cos = Mathf.Cos(a), sin = Mathf.Sin(a),
+                src = null,                       // 콜라이더와 무관하게 산다 — 그것이 요점이다
+            });
+        }
+
+        /// <summary>지금 등록된 토대 수. 실측용.</summary>
+        public static int FoundationCount => s_foundations.Count;
+
+        /// <summary>
+        /// 두 점을 잇는 선분이 토대를 가로지르는가 [11번 CableOnly].
+        ///
+        /// 케이블 궤적은 점 간격 0.25m짜리 짧은 선분의 연속이라, 격자를 쓸 만큼 길지 않다.
+        /// 토대는 많아야 30개이고 그중 부순 것만 등록되므로 전부 보는 편이 더 싸다 —
+        /// 격자를 타면 칸 조회가 선분 판정보다 비싸진다 (실측: 질의당 Dictionary 한 번이 0.0001ms).
+        /// </summary>
+        public static bool BlocksCable(Vector2 from, Vector2 to)
+        {
+            for (int i = 0; i < s_foundations.Count; i++)
+            {
+                Box b = s_foundations[i];
+
+                // 상자의 로컬 좌표로 내려 축정렬 슬래브 판정을 한다
+                float ax = (from.x - b.cx) * b.cos - (from.y - b.cz) * b.sin;
+                float az = (from.x - b.cx) * b.sin + (from.y - b.cz) * b.cos;
+                float bx = (to.x - b.cx) * b.cos - (to.y - b.cz) * b.sin;
+                float bz = (to.x - b.cx) * b.sin + (to.y - b.cz) * b.cos;
+
+                if (Mathf.Abs(ax) <= b.hx && Mathf.Abs(az) <= b.hz) return true;
+                if (Mathf.Abs(bx) <= b.hx && Mathf.Abs(bz) <= b.hz) return true;
+
+                float t0 = 0f, t1 = 1f;
+                if (!Slab(ax, bx - ax, b.hx, ref t0, ref t1)) continue;
+                if (!Slab(az, bz - az, b.hz, ref t0, ref t1)) continue;
+                if (t1 - t0 > 1e-6f) return true;        // 모서리를 스치기만 한 것은 통과로 본다
+            }
+            return false;
+        }
+
+        static bool Slab(float a, float d, float h, ref float t0, ref float t1)
+        {
+            if (Mathf.Abs(d) < 1e-9f) return a >= -h && a <= h;
+            float u = (-h - a) / d, v = (h - a) / d;
+            if (u > v) { float w = u; u = v; v = w; }
+            if (u > t0) t0 = u;
+            if (v < t1) t1 = v;
+            return t0 <= t1;
         }
 
         static int Key(int x, int z) => (x * 73856093) ^ (z * 19349663);

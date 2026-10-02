@@ -134,8 +134,10 @@ class SnagSim(Sim):
             if d == float('inf'):
                 return None
 
+        # <b>길 찾기와 걸림 판정은 다른 사각형을 본다</b> [고침 2026-10-02].
+        # C_발판에서는 플레이어가 토대를 넘어가지만 끌려오는 짐은 거기 걸린다.
         stuck, events, worst, total = sweep(route, self.collected_in_tow,
-                                            self.cur_debris_r, rects)
+                                            self.cur_debris_r, self.debris_rects(exclude))
         self.stuck_m += stuck
         self.haul_m += total
         self.events += events
@@ -220,6 +222,41 @@ def sweep_quota():
     CFG['quota'] = saved
 
 
+def matrix():
+    """11번 5안 x 14번 5반응 = 25칸. <b>둘은 서로 영향을 준다.</b>
+
+    토대를 막게 하면(B·C·E) 그 토대가 곧 잔해가 걸릴 자리가 되므로, 14번의 걸림이
+    저절로 늘어난다. 따로 재면 이 상호작용이 안 보인다."""
+    print()
+    print('=' * 100)
+    print('11 x 14 전 조합 (할당량 %d · 견인 감속 flat)' % CFG['quota'])
+    print('=' * 100)
+    from sim_foundation import OPTIONS as F
+    found = list(F)
+    base = SnagSim('Pass', foundation='A_그대로').run().t
+
+    print('%-11s %s' % ('11번 vs 14번', ''.join('%12s' % r for r in RESPONSES)))
+    for f in found:
+        cells = []
+        for r in RESPONSES:
+            s = SnagSim(r, foundation=f).run()
+            cells.append('%+6.1f초' % (s.t - base))
+        print('%-11s %s' % (f, ''.join('%12s' % c for c in cells)))
+    print()
+    print('A_그대로 + Pass = %.1f초를 0으로 둔 상대값이다.' % base)
+
+    print()
+    print('-' * 100)
+    print('걸림 빈도 — 토대를 막으면 짐이 걸릴 자리가 늘어난다')
+    print('-' * 100)
+    print('%-11s %12s %12s %12s' % ('11번', '걸린거리%', '걸림사건', '고리 쪼갬'))
+    for f in found:
+        s = SnagSim('Block', foundation=f).run()
+        pct = s.stuck_m / s.haul_m * 100 if s.haul_m else 0.0
+        print('%-11s %11.0f%% %11d회 %11d회' % (f, pct, s.events, s.blocked_loops))
+
+
 if __name__ == '__main__':
     main()
     sweep_quota()
+    matrix()

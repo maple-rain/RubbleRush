@@ -136,6 +136,41 @@ namespace Demo.Data
         [Tooltip("동시 구조물 상한. ZoneBuilder가 넘기면 경고한다")]
         public int structureMaxActive = 60;
 
+        // ── 11번: 다 부순 자리에 남는 토대를 어떻게 할 것인가 [구현 2026-10-02] ──────
+        //
+        // 다섯 안을 <b>전부 구현해 두고</b> 여기서 고른다. 기획자가 직접 겪어 보고 정하라는 뜻이다.
+        // 기본값 None은 2026-10-01 이전 동작이라, 고르기 전까지 게임은 안 바뀐다.
+        //
+        // 토대는 원본 발자국의 (x 0.90, z 1.00)에 높이 0.40이다 — 5종 전부 같다 [실측].
+        // 0.40은 CharacterController.stepOffset 0.30보다 높아서, 콜라이더만 켜면 바로 막힌다
+        // (실측: x 15.75에서 완전 정지. 0.45로 올리면 올라타 넘어간다).
+
+        public enum FoundationRule
+        {
+            /// <summary>장식. 아무것도 안 막는다. 2026-10-01 이전 동작</summary>
+            None = 0,
+            /// <summary>콜라이더를 켠다. 걸어서 못 지나간다</summary>
+            Obstacle = 1,
+            /// <summary>콜라이더를 켜고 stepOffset을 올려 올라설 수 있게 한다</summary>
+            Platform = 2,
+            /// <summary>걸어서는 지나가지만 케이블이 못 넘는다</summary>
+            CableOnly = 3,
+            /// <summary>막지만 일정 시간 뒤 사라진다</summary>
+            Decay = 4,
+        }
+
+        [Tooltip("다 부순 자리에 남는 토대를 어떻게 할 것인가 [11번].\n" +
+                 "None = 장식(지금) · Obstacle = 못 지나감 · Platform = 올라설 수 있음 · " +
+                 "CableOnly = 케이블만 막힘 · Decay = 막지만 사라짐")]
+        public FoundationRule foundationRule = FoundationRule.None;
+
+        [Tooltip("Decay에서 토대가 사라지기까지(초). 다른 규칙에서는 안 쓴다")]
+        public float foundationDecaySeconds = 20f;
+
+        [Tooltip("Platform에서 쓸 CharacterController.stepOffset.\n" +
+                 "토대 높이 0.40보다 커야 올라탄다. 실측: 0.30은 막히고 0.45는 넘어간다")]
+        public float platformStepOffset = 0.45f;
+
         /// <summary>견인량에 따른 이동 속도. 곡선의 모양은 PlayerController가 정한다.</summary>
         public float SpeedFloor => moveSpeedMin;
 

@@ -25,6 +25,9 @@ namespace Demo.Player
 
         CharacterController cc;
         Core.FollowCamera view;
+
+        /// <summary>씬에 박혀 있던 stepOffset. 11번 Platform에서 되돌릴 기준값이다.</summary>
+        float baseStepOffset;
         float verticalVelocity;
         float stunRemaining;
         bool warnedPlaceholder;
@@ -54,6 +57,7 @@ namespace Demo.Player
         {
             // CLAUDE.md 규칙 5 — Update에서 GetComponent 금지. 여기서 잡아둔다.
             cc = GetComponent<CharacterController>();
+            baseStepOffset = cc.stepOffset;
             if (input == null) input = GetComponent<InputRouter>();
             if (cargo == null) cargo = GetComponent<Collection.CargoTow>();
             view = FindFirstObjectByType<Core.FollowCamera>();
@@ -99,6 +103,13 @@ namespace Demo.Player
 
             TopSpeed = cfg.moveSpeedBase;
             IsRunning = input != null && input.RunActive;
+
+            // 11번 Platform이면 토대(높이 0.40)에 올라설 수 있어야 한다.
+            // 씬 값 0.30으로는 실측에서 완전히 막혔다 — 넘으려면 0.40보다 커야 한다.
+            // 규칙이 바뀔 수 있으므로 매 프레임 보지만, 같으면 쓰지 않는다.
+            float wantStep = cfg.foundationRule == GameConfig.FoundationRule.Platform
+                           ? cfg.platformStepOffset : baseStepOffset;
+            if (!Mathf.Approximately(cc.stepOffset, wantStep)) cc.stepOffset = wantStep;
 
             // 입력을 <b>화면 기준</b>으로 돌린다 [지시 2026-09-28].
             //

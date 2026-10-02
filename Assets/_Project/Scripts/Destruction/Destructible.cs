@@ -52,8 +52,6 @@ namespace Demo.Destruction
             rubble = SpawnMesh(data.meshRubble, "Rubble");
 
             box = gameObject.AddComponent<BoxCollider>();
-            box.size = data.colliderSize;
-            box.center = new Vector3(0f, data.colliderSize.y * 0.5f, 0f);
             s_byCollider[box] = this;
 
             SetState(State.Intact);
@@ -133,6 +131,23 @@ namespace Demo.Destruction
             return true;
         }
 
+        // 토대 치수 — 5종 전부 같다 [실측 2026-10-01].
+        // 발자국은 원본의 (x 0.90, z 1.00), 높이는 0.40.
+        const float RubbleShrinkX = 0.90f;
+        const float RubbleShrinkZ = 1.00f;
+        const float RubbleHeight = 0.40f;
+
+        /// <summary>토대의 바닥 발자국(월드 중심·반너비). 케이블 차단 판정이 읽는다 [11번 CableOnly].</summary>
+        public void FoundationFootprint(out Vector3 center, out float halfX, out float halfZ)
+        {
+            Vector3 s = Data != null ? Data.colliderSize : Vector3.one;
+            center = transform.position;
+            halfX = s.x * RubbleShrinkX * 0.5f;
+            halfZ = s.z * RubbleShrinkZ * 0.5f;
+        }
+
+        float rubbleSince = -1f;
+
         void SetState(State next)
         {
             Current = next;
@@ -141,9 +156,79 @@ namespace Demo.Destruction
             if (damaged != null) damaged.SetActive(next == State.Damaged);
             if (rubble != null) rubble.SetActive(next == State.Rubble);
 
-            // 잔해가 된 것은 더 이상 부딪히지 않는다 — 부순 자리를 지나갈 수 있어야 한다.
+            if (next == State.Rubble && rubbleSince < 0f)
+            {
+                rubbleSince = Time.time;
+
+                // 케이블 차단 판정은 콜라이더와 별개로 산다 — CableOnly에서는 콜라이더가 꺼져 있다.
+                FoundationFootprint(out Vector3 c, out float hx, out float hz);
+                Hazard.ObstacleField.AddFoundation(c, hx, hz, transform.eulerAngles.y);
+            }
+
             // 오브젝트 자체는 남긴다. 들어올 때와 나갈 때의 스카이라인이 달라야 하기 때문이다.
-            if (box != null) box.enabled = next != State.Rubble;
+            ApplyCollider();
+        }
+
+        /// <summary>
+        /// 콜라이더를 지금 상태에 맞춘다.
+        ///
+        /// <b>토대가 되면 상자도 토대 크기로 줄인다</b> [고침 2026-10-02].
+        /// 예전에는 잔해가 되면 그냥 껐으므로 크기가 뭐든 상관없었는데,
+        /// 11번에서 토대를 막게 할 수 있게 되면서 <b>원본 건물 크기 그대로 막아 버리는</b>
+        /// 문제가 생긴다 — T5Solid면 높이 9.8m짜리 보이지 않는 벽이 선다.
+        /// </summary>
+        void ApplyCollider()
+        {
+            if (box == null || Data == null) return;
+
+            if (Current != State.Rubble)
+            {
+                box.size = Data.colliderSize;
+                box.center = new Vector3(0f, Data.colliderSize.y * 0.5f, 0f);
+                box.enabled = true;
+                return;
+            }
+
+            box.size = new Vector3(Data.colliderSize.x * RubbleShrinkX, RubbleHeight,
+                                   Data.colliderSize.z * RubbleShrinkZ);
+            box.center = new Vector3(0f, RubbleHeight * 0.5f, 0f);
+            box.enabled = FoundationSolid();
+        }
+
+        /// <summary>지금 규칙에서 토대가 길을 막는가 [11번].</summary>
+        bool FoundationSolid()
+        {
+            GameConfig cfg = GameConfigRef.Current;
+            if (cfg == null) return false;
+
+            switch (cfg.foundationRule)
+            {
+                case GameConfig.FoundationRule.Obstacle:
+                case GameConfig.FoundationRule.Platform:
+                    return true;
+                case GameConfig.FoundationRule.Decay:
+                    return rubbleSince >= 0f &&
+                           (Time.time - rubbleSince) < cfg.foundationDecaySeconds;
+                default:
+                    return false;      // None · CableOnly — 걸어서는 지나간다
+            }
+        }
+
+        /// <summary>
+        /// 소멸 규칙(Decay)일 때만 일을 한다 [11번].
+        ///
+        /// <b>왜 Update인가.</b> 토대가 <b>스스로</b> 꺼지는 것은 이 규칙뿐이고, 꺼지는 순간을
+        /// 알려 줄 쪽이 없다. 다른 네 규칙에서는 첫 줄에서 바로 돌아 나오므로,
+        /// 구조물 30개가 내는 비용은 이른 반환 30번이다.
+        /// </summary>
+        void Update()
+        {
+            if (Current != State.Rubble || !box.enabled) return;
+
+            GameConfig cfg = GameConfigRef.Current;
+            if (cfg == null || cfg.foundationRule != GameConfig.FoundationRule.Decay) return;
+
+            if ((Time.time - rubbleSince) >= cfg.foundationDecaySeconds) box.enabled = false;
         }
     }
 }

@@ -36,6 +36,9 @@ namespace Demo.Collection
         /// <summary>마지막 폐합에서 잡은 잔해 수. 연출 트리거용.</summary>
         public int LastCaptureCount { get; private set; }
 
+        /// <summary>토대에 막혀 궤적이 끊긴 횟수 [11번 CableOnly]. 실측용.</summary>
+        public int BlockedCount { get; private set; }
+
         void Awake()
         {
             line = GetComponent<LineRenderer>();
@@ -69,7 +72,21 @@ namespace Demo.Collection
                 return;
             }
 
-            if (Vector2.Distance(points[points.Count - 1], here) < cfg.cablePointInterval) return;
+            Vector2 last = points[points.Count - 1];
+            if (Vector2.Distance(last, here) < cfg.cablePointInterval) return;
+
+            // 토대 위로는 케이블이 지나가지 못한다 [11번 CableOnly, 2026-10-02].
+            //
+            // 막히면 <b>궤적을 끊고 그때까지의 고리를 포기한다.</b> 거기서 멈추고 기다리게 하면
+            // 플레이어는 자기가 왜 못 그리는지 모른 채 서 있게 된다 — 끊어 주면 선이 사라져서
+            // "여기는 안 된다"가 바로 보인다. 규칙이 None이면 이 줄은 한 번도 참이 되지 않는다.
+            if (cfg.foundationRule == GameConfig.FoundationRule.CableOnly &&
+                Hazard.ObstacleField.BlocksCable(last, here))
+            {
+                BlockedCount++;
+                Clear();
+                return;
+            }
 
             Add(here);
             TrimToMaxLength(cfg.cableMaxLength);

@@ -87,6 +87,8 @@ namespace Demo.EditorTools
                        Note = "Slow에서 걸려 있는 동안의 속도 배율(0.1~1)" },
             new Knob { Key = "snag.radiusScale", Path = "snag.radiusScale",
                        Note = "판정에 쓸 잔해 반경 배율(0.2~2). 작게 하면 스칠 때는 안 걸린다" },
+            new Knob { Key = "snag.cooldownSeconds", Path = "snag.cooldownSeconds",
+                       Note = "한 번 터진 뒤 다시 터질 때까지 쉬는 시간(초). 0이면 연달아 터진다" },
         };
 
         static string Full(string rel) =>
