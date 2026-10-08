@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace Demo.Core
@@ -112,6 +112,13 @@ namespace Demo.Core
             if (Current == next) return;
             Mode prev = Current;
             Current = next;
+
+            // 화면이 바뀌면 곡도 바뀐다 [2026-10-08]. 두 곡은 같은 조·같은 박자라
+            // 겹쳐 넘어가도 어긋나지 않는다 (MusicPlayer가 crossfade한다).
+            // 창구가 없으면 조용히 넘어간다 — 음악은 마지막에 붙는 것이다.
+            Utils.MusicPlayer music = Utils.MusicPlayer.Current;
+            if (music != null) music.SetDemolition(next == Mode.Demolition);
+
             Changed?.Invoke(prev, next);
         }
     }

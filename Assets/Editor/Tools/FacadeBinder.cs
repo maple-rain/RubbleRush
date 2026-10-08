@@ -16,7 +16,8 @@ namespace Demo.EditorTools
     ///
     /// <b>규칙</b>: <c>Assets/_Project/Art/Facades/T_&lt;id&gt;_&lt;면&gt;.png</c>에서
     /// <c>&lt;id&gt;</c>가 StructureData의 <c>id</c> 필드와 같으면 그 자리에 들어간다.
-    /// 면은 <c>front · right · back · left</c>. <b>front만 있으면 나머지 세 면도 같은 것을
+    /// 면은 <c>front · right · back · left</c>이고, 파괴 단계는
+    /// <c>front_damaged · front_rubble</c>이다. <b>front만 있으면 나머지 세 면도 같은 것을
     /// 쓴다</b> — 입구가 사방에 생기지만, 민짜 회색 박스보다는 낫고 면당 한 장씩 뽑는 것은
     /// 나중에 해도 된다.
     ///
@@ -74,6 +75,15 @@ namespace Demo.EditorTools
                     so.FindProperty("facade" + Cap(Faces[f])).objectReferenceValue = tex;
                     used.Add(own ? Faces[f] : Faces[f] + "(앞면)");
                 }
+                // 파괴 단계 — 있으면 꽂고 없으면 비워 둔다.
+                // StructureData.FacadeForState가 없을 때 한 단계 앞의 것으로 물러선다.
+                byKey.TryGetValue("t_" + id + "_front_damaged", out Texture2D dmg);
+                byKey.TryGetValue("t_" + id + "_front_rubble", out Texture2D rub);
+                so.FindProperty("facadeDamaged").objectReferenceValue = dmg;
+                so.FindProperty("facadeRubble").objectReferenceValue = rub;
+                if (dmg != null) used.Add("파손");
+                if (rub != null) used.Add("잔해");
+
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(data);
                 bound++;
