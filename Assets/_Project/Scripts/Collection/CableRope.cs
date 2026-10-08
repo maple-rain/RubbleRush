@@ -44,6 +44,13 @@ namespace Demo.Collection
                  "클수록 그물이 짐에 착 붙고, 작으면 느슨하게 끌려온다")]
         float hugStrength = 18f;
 
+        [SerializeField, Tooltip("테두리를 <b>자유 사슬</b>로 둔다 [2026-10-08].\n" +
+                 "끄면(기본) 위의 조이는 힘이 모든 점을 같은 반지름으로 밀어 — 즉 " +
+                 "<b>항상 원</b>이 된다. 켜면 그 힘을 빼고 둘레 길이만 고정해서, " +
+                 "손이 당기는 쪽과 잔해가 미는 쪽에 따라 모양이 스스로 정해진다.\n" +
+                 "타원을 그리는 코드는 없다 — 타원은 결과다")]
+        bool freeChain;
+
         [SerializeField, Tooltip("바닥 높이(m). 줄이 이 밑으로 안 내려간다")]
         float floorY = 0.06f;
 
@@ -59,6 +66,9 @@ namespace Demo.Collection
         public int Count => p != null ? p.Length : 0;
         public bool Ready => ready;
         public Vector3 At(int i) => p[i];
+
+        /// <summary>실측용·기획 비교용. 조이는 힘을 빼고 둘레만 고정할 것인가.</summary>
+        public bool FreeChain { get => freeChain; set => freeChain = value; }
 
         /// <summary>테두리 점 수. 렌더러가 선분 수를 맞출 때 읽는다.</summary>
         public int RingPoints => Mathf.Max(4, ringPoints);
@@ -106,35 +116,33 @@ namespace Demo.Collection
                 p[i].y -= g;
             }
 
-            // ② 뭉치를 끌어안는 힘 — 테두리를 목표 반지름 쪽으로 민다
-            float hug = Mathf.Clamp01(hugStrength * dt);
+            // ② 뭉치를 끌어안는 힘 — 테두리를 목표 반지름 쪽으로 민다.
+            //
+            // <b>이 힘이 원을 강제한다</b>. 모든 점을 center에서 같은 거리로 밀기 때문에,
+            // 당기든 밀리든 테두리는 항상 원으로 돌아온다. 그래서 주머니 모형에서는 끈다 —
+            // 거기서는 모양이 입력이 아니라 결과여야 한다 [2026-10-08].
             float r = Mathf.Max(0.05f, radius);
-            for (int i = 0; i < n; i++)
+            if (!freeChain)
             {
-                Vector3 d = p[i] - center; d.y = 0f;
-                float len = d.magnitude;
-                if (len < 1e-4f) continue;
-                Vector3 want = center + d * (r / len);
-                want.y = p[i].y;
-                p[i] = Vector3.Lerp(p[i], want, hug);
+                float hug = Mathf.Clamp01(hugStrength * dt);
+                for (int i = 0; i < n; i++)
+                {
+                    Vector3 d = p[i] - center; d.y = 0f;
+                    float len = d.magnitude;
+                    if (len < 1e-4f) continue;
+                    Vector3 want = center + d * (r / len);
+                    want.y = p[i].y;
+                    p[i] = Vector3.Lerp(p[i], want, hug);
+                }
+
+                // 짐이 줄면 그물도 조여든다. 자유 사슬은 <b>처음 둘러싼 둘레를 그대로 쓴다</b> —
+                // 그려 둔 고리가 곧 그물 크기이고, 짐이 줄어도 그물은 안 작아진다.
+                float target = Mathf.Max(0.01f, 2f * Mathf.PI * r / n);
+                restLength = Mathf.Lerp(restLength, target, Mathf.Clamp01(6f * dt));
             }
 
             // ③ 구속 — 이웃 사이 길이와 바닥. 반복할수록 뻣뻣해진다
-            float target = Mathf.Max(0.01f, 2f * Mathf.PI * r / n);
-            restLength = Mathf.Lerp(restLength, target, Mathf.Clamp01(6f * dt));
-            for (int k = 0; k < iterations; k++)
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    int j = (i + 1) % n;
-                    Vector3 d = p[j] - p[i];
-                    float len = d.magnitude;
-                    if (len < 1e-5f) continue;
-                    Vector3 fix = d * ((len - restLength) / len * 0.5f);
-                    p[i] += fix; p[j] -= fix;
-                }
-                for (int i = 0; i < n; i++) if (p[i].y < floorY) p[i].y = floorY;
-            }
+            Relax();
 
             // ④ 손 쪽으로 당긴다 — <b>못 박지 않는다</b> [고침 2026-10-01].
             //
@@ -144,12 +152,39 @@ namespace Demo.Collection
             // 줄은 테두리의 일부가 아니라 테두리로 가는 별도의 선이다 — Draw가 그린다.
             Hand = hand;
             Near = NearestTo(hand);
-            if (pullToHand > 0f)
+
+            if (freeChain)
+            {
+                // <b>손은 당기지 않는다. 쥐고 있다</b> [고침 2026-10-08].
+                //
+                // 부드러운 lerp로 당기면 그물이 못 따라온다 — 실측에서 잔해 32개일 때
+                // 짐이 플레이어 뒤 15.2m까지 떨어졌다. 조이는 힘을 뺀 순간
+                // <b>그물을 끌고 갈 주체가 사라진 것</b>이다 (예전에는 그 힘이 모든 점을
+                // 플레이어 쪽 매듭으로 당겨서, 끄는 일까지 겸하고 있었다).
+                //
+                // 줄은 늘어나지 않으므로 거리 상한은 <b>구속</b>이다. 가장 가까운 점 하나만
+                // 끌어당기고 <see cref="Relax"/>로 테두리에 퍼뜨린다 — 그 전파가 늦는 만큼
+                // 뒤쪽이 처지고, <b>그 처짐이 곧 타원</b>이다. 모양을 그리는 코드는 없다.
+                Vector3 d = p[Near] - hand; d.y = 0f;
+                float len = d.magnitude;
+                if (len > Leash && len > 1e-4f)
+                {
+                    p[Near] -= d * ((len - Leash) / len);
+                    Relax();
+                }
+            }
+            else if (pullToHand > 0f)
             {
                 Vector3 d = hand - p[Near]; d.y = 0f;
                 p[Near] += d * (pullToHand * Mathf.Clamp01(dt * 10f));
             }
         }
+
+        /// <summary>
+        /// 손과 테두리 사이 줄의 길이(m). 자유 사슬일 때만 쓴다 — 이 거리를 넘으면 테두리가 끌려온다.
+        /// <see cref="CargoTow"/>가 매 프레임 넣는다.
+        /// </summary>
+        public float Leash { get; set; } = 2.5f;
 
         /// <summary>플레이어가 줄을 쥔 자리. Draw가 여기서 선을 시작한다.</summary>
         public Vector3 Hand { get; private set; }
@@ -168,6 +203,56 @@ namespace Demo.Collection
             }
             return best;
         }
+
+        /// <summary>
+        /// 길이·바닥 구속을 다시 맞춘다. 밖에서 <see cref="Push"/>로 테두리를 밀었으면
+        /// 이웃 간 길이가 어긋나 있으므로 <b>민 쪽이 직접 불러야 한다</b>.
+        /// 베를레의 성질이다 — 위치를 억지로 옮겨도 반복만 돌리면 속도까지 맞아 들어간다.
+        /// </summary>
+        public void Relax()
+        {
+            if (!ready) return;
+            int n = p.Length;
+            for (int k = 0; k < iterations; k++)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    int j = (i + 1) % n;
+                    Vector3 d = p[j] - p[i];
+                    float len = d.magnitude;
+                    if (len < 1e-5f) continue;
+                    Vector3 fix = d * ((len - restLength) / len * 0.5f);
+                    p[i] += fix; p[j] -= fix;
+                }
+                for (int i = 0; i < n; i++) if (p[i].y < floorY) p[i].y = floorY;
+            }
+        }
+
+        /// <summary>
+        /// 테두리 점 하나를 민다 — <see cref="NetPocket"/>의 반작용 입구다.
+        /// 이게 없으면 그물은 쇠틀이고, 잔해가 아무리 밀어도 모양이 안 바뀐다.
+        /// </summary>
+        public void Push(int i, Vector3 delta)
+        {
+            if (!ready || i < 0 || i >= p.Length) return;
+            delta.y = 0f;
+            p[i] += delta;
+        }
+
+        /// <summary>테두리의 무게중심. 안팎을 가를 때 쓴다 — 볼록하지 않아도 대체로 맞는다.</summary>
+        public Vector3 Centroid
+        {
+            get
+            {
+                if (!ready) return Vector3.zero;
+                Vector3 s = Vector3.zero;
+                for (int i = 0; i < p.Length; i++) s += p[i];
+                return s / p.Length;
+            }
+        }
+
+        /// <summary>지금 둘레 길이(m). 자유 사슬이면 처음 둘러싼 고리의 길이 그대로다.</summary>
+        public float Perimeter => ready ? restLength * p.Length : 0f;
 
         /// <summary>
         /// 손에서 뻗어 나가 테두리를 한 바퀴 도는 한 줄로 그린다.

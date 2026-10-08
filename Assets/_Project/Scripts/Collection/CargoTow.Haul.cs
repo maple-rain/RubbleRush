@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Demo.Collection
 {
@@ -22,6 +22,7 @@ namespace Demo.Collection
         {
             net.Clear();
             tension.Clear();
+            pocket.Clear();
             snag.Reset();
             if (netLine != null) netLine.positionCount = 0;
         }
@@ -46,7 +47,18 @@ namespace Demo.Collection
             snagged.Clear();
         }
 
-        void LateUpdate()
+        void LateUpdate() => Step(Time.deltaTime);
+
+        /// <summary>
+        /// 한 프레임 전진한다. <see cref="LateUpdate"/>가 <c>Time.deltaTime</c>으로 부른다.
+        ///
+        /// <b>왜 따로 빼는가</b> [2026-10-08]. 에디트 모드에서는 <c>Time.deltaTime</c>이 0이라
+        /// LateUpdate가 아무 일도 안 하고, 플레이 모드는 포커스가 없으면 프레임이 안 돈다
+        /// (실측으로 확인한 함정이다). 둘 다 피하려면 <b>시간을 밖에서 넣을 수 있어야</b> 한다.
+        /// 그래야 두 모형(Slots·Pocket)을 같은 dt·같은 경로로 돌려 비교할 수 있다 —
+        /// 비교 대상이 실제로 게임에서 도는 그 코드여야 하므로, 측정용으로 따로 베껴 쓰지 않는다.
+        /// </summary>
+        public void Step(float dt)
         {
             if (towed.Count == 0)
             {
@@ -54,7 +66,7 @@ namespace Demo.Collection
                 return;
             }
 
-            float dt = Time.deltaTime;
+            if (dt <= 0f) return;
             Vector3 here = transform.position;
             Vector3 back = -transform.forward;
 
@@ -74,27 +86,78 @@ namespace Demo.Collection
             }
             anchor.y = here.y;
 
-            // ② 잔해를 그 둘레에 깐다. 실제로 얼마나 퍼졌는지를 돌려받는다
+            // ② 잔해의 자리를 정한다 — 두 모형은 <b>순서가 서로 반대</b>다 [2026-10-08].
+            //
+            // Slots: 잔해를 먼저 깔고, 퍼진 만큼을 재서 그물이 그것을 감싼다.
+            // Pocket: 그물이 먼저 움직이고, 그 움직인 경계가 잔해를 민다.
+            // 한 쪽 순서로 다른 쪽을 돌리면 반응이 한 프레임 늦어 그물이 짐을 뚫고 지나간다.
+            Vector3 hand = here + dir * 0.4f;   // 줄을 쥔 자리 — 거기서 뻗어야 끌려 보인다
+            hand.y = here.y;
+
             snag.Begin();
             snagged.Clear();
-            float spread = PlaceSlots(anchor, dir, dt);
-            snag.End(dt);
-            ResolveSnag();
 
-            // ③ 줄을 푼다
-            if (UseRope)
+            if (shape == HaulShape.Pocket && UseRope)
             {
-                // 그물을 쥔 손은 플레이어 쪽 — 줄이 거기서 뻗어 나가야 끌려오는 것으로 보인다
-                Vector3 hand = here + dir * 0.4f;
-                hand.y = here.y;
-
+                net.Leash = trailDistance;                // 손이 쥔 줄의 길이. 이게 그물을 끈다
+                net.Tick(dt, anchor, DiscRadius, hand);   // 자유 사슬이라 반지름은 안 쓰인다
+                PlacePocket(dt);
+                net.Draw(netLine);
+            }
+            else
+            {
                 // <b>공칭 반지름이 아니라 실제 퍼진 만큼을 감싼다</b> [고침 2026-10-01].
                 // DiscRadius(4.02m)로 감싸면 끌리면서 뒤처진 바깥 잔해(실측 5.56m)가
                 // 그물 밖으로 삐져나온다 — 그물이 짐을 싼 것으로 안 보인다.
-                net.Tick(dt, anchor, spread, hand);
-                net.Draw(netLine);
+                float spread = PlaceSlots(anchor, dir, dt);
+                if (UseRope) { net.Tick(dt, anchor, spread, hand); net.Draw(netLine); }
+                else if (netLine != null && netLine.positionCount != 0) netLine.positionCount = 0;
             }
-            else if (netLine != null && netLine.positionCount != 0) netLine.positionCount = 0;
+
+            snag.End(dt);
+            ResolveSnag();
+        }
+
+        /// <summary>
+        /// 그물 안에서 잔해가 <b>밀려</b> 자리를 잡는다 [지시 2026-10-08].
+        ///
+        /// 여기에는 자리를 계산하는 식이 없다 — <see cref="NetPocket"/>에 현재 위치를 넘기고
+        /// 풀린 결과를 받아 적을 뿐이다. 그게 이 모형의 요점이다. 짐이 끌리면서
+        /// 타원이 되는 것도, 뒤쪽에 쌓이는 것도 아무도 그리지 않는다.
+        ///
+        /// <b>속도는 조각이 들고 온다</b>(<see cref="Debris.TowPrev"/>) — 구멍이 하나씩
+        /// 삼켜 목록 중간이 빠져도 옆 조각의 속도와 안 섞인다.
+        /// </summary>
+        void PlacePocket(float dt)
+        {
+            int n = towed.Count;
+            pocket.Begin(n);
+            for (int i = 0; i < n; i++)
+            {
+                Debris d = towed[i];
+                if (d == null) { pocket.Set(i, net.Centroid, net.Centroid, 0.05f); continue; }
+                pocket.Set(i, d.transform.position, d.TowPrev, d.SizeRadius);
+            }
+
+            pocket.Solve(dt, net);
+
+            for (int i = 0; i < n; i++)
+            {
+                Debris d = towed[i];
+                if (d == null) continue;
+
+                // 구멍이 당기는 중이면 놓아준다. 두 힘이 맞서면 잔해가 그 사이에서 떤다.
+                if (d.IsBeingSucked) { d.TowPrev = d.transform.position; continue; }
+
+                Vector3 at = pocket.PositionOf(i);
+                at.y = d.transform.position.y;
+
+                // 건물·토대에 걸렸는가 [14번]. 여기서 자리를 고치면 다음 프레임의 속도도 같이 죽는다
+                if (snag.Check(ref at, d.SizeRadius)) { snagged.Add(d); d.TowPrev = at; }
+                else d.TowPrev = pocket.PrevOf(i);
+
+                d.transform.position = at;
+            }
         }
 
         /// <summary>

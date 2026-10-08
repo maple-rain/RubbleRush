@@ -32,9 +32,26 @@ namespace Demo.Collection
             Both = 3,
         }
 
+        /// <summary>
+        /// 잔해의 자리를 <b>누가 정하는가</b> [지시 2026-10-08]. 인과가 서로 반대라 값이 아니라 모형이다.
+        /// </summary>
+        public enum HaulShape
+        {
+            /// <summary>계산해서 꽂는다 — 해바라기 나선. 움직임과 무관하게 <b>항상 원</b>이다</summary>
+            Slots = 0,
+            /// <summary>그물이 경계를 만들고 잔해가 그 안에서 밀린다. 모양이 <b>결과</b>로 나온다</summary>
+            Pocket = 1,
+        }
+
         [SerializeField, Tooltip("어디에 물리를 걸 것인가.\n" +
                  "Off = 2026-10-01 이전 동작 · TensionOnly = ③ · RopeOnly = ① · Both = 둘 다")]
         PhysicsMode mode = PhysicsMode.Both;
+
+        [SerializeField, Tooltip("잔해의 자리를 누가 정하는가 [2026-10-08].\n" +
+                 "Slots = 해바라기 나선에 꽂는다(기존). 끌어도 원 모양 그대로다\n" +
+                 "Pocket = 그물 안에서 밀린다. 끌면 타원이 되고 끝쪽에 쌓인다\n" +
+                 "Pocket은 줄(RopeOnly·Both)이 켜져 있어야 뜻이 있다 — 경계가 곧 그물이다")]
+        HaulShape shape = HaulShape.Slots;
 
         [SerializeField, Tooltip("뭉치가 플레이어 뒤로 떨어지는 거리(m). 장력을 켜면 줄 길이가 된다")]
         float trailDistance = 2.5f;
@@ -60,6 +77,10 @@ namespace Demo.Collection
 
         [SerializeField, Tooltip("그물을 그릴 선. 비면 안 그린다. 전개 궤적용 선과는 다른 것이다")]
         LineRenderer netLine;
+
+        [Header("주머니 — 그물 안쪽 [2026-10-08]")]
+        [SerializeField, Tooltip("Pocket 모형일 때만 돈다")]
+        NetPocket pocket = new NetPocket();
 
         [Header("매듭 — ③ 장력")]
         [SerializeField] TowTension tension = new TowTension();
@@ -88,6 +109,12 @@ namespace Demo.Collection
 
         /// <summary>실측용. 그물 테두리 점의 월드 좌표. 준비 안 됐으면 0개.</summary>
         public CableRope Net => net;
+
+        /// <summary>실측용·기획 비교용. 잔해 자리를 누가 정하는가.</summary>
+        public HaulShape Shape { get => shape; set => shape = value; }
+
+        /// <summary>실측용. 그물 안쪽의 구속 결과 — 새어 나간 수, 겹친 쌍, 테두리 접촉 수.</summary>
+        public NetPocket Pocket => pocket;
 
         /// <summary>실측용·기획 비교용. 걸림 정책 [14번].</summary>
         public Hazard.DebrisSnag Snag => snag;
@@ -128,6 +155,7 @@ namespace Demo.Collection
                 if (d == null || d.IsTowed) continue;
 
                 d.IsTowed = true;
+                d.TowPrev = d.transform.position;   // 주머니 모형의 속도를 0에서 시작한다
                 towed.Add(d);
                 TotalUnits += d.SizeClass;
             }
@@ -141,7 +169,45 @@ namespace Demo.Collection
             Vector3 back = -transform.forward;
             tension.Length = Leash;
             tension.Reset(transform.position, back);
-            net.Reset(transform.position + back * Leash, DiscRadius);
+
+            // 주머니 모형은 조이는 힘이 있으면 성립하지 않는다 — 그 힘이 원을 강제한다.
+            // 기획자가 스위치 하나만 넘기면 되도록 여기서 같이 맞춘다 [2026-10-08].
+            net.FreeChain = shape == HaulShape.Pocket;
+
+            if (shape == HaulShape.Pocket)
+            {
+                // <b>둘러싼 자리에 둘러싼 크기로 편다</b> [고침 2026-10-08].
+                //
+                // DiscRadius(=0.9√n)는 해바라기 슬롯이 몇 겹으로 깔릴지를 말하는 수이지
+                // 플레이어가 실제로 그린 고리가 아니다. 자유 사슬은 둘레가 고정이라
+                // 이 수가 그대로 영구적인 그물 크기가 된다 — 잔해 32개면 반경 5.09m,
+                // 둘레 32m짜리 자루가 되어 짐이 플레이어 뒤 10m에서 논다 (실측).
+                // 지금 잡은 것이 퍼져 있는 만큼으로 재면 둘러싼 모양에서 출발한다.
+                net.Reset(CapturedCenter(out float r), r);
+            }
+            else net.Reset(transform.position + back * Leash, DiscRadius);
+        }
+
+        /// <summary>방금 잡은 것들의 중심과, 그것을 다 덮는 반지름.</summary>
+        Vector3 CapturedCenter(out float radius)
+        {
+            Vector3 mid = Vector3.zero;
+            int c = 0;
+            for (int i = 0; i < towed.Count; i++)
+                if (towed[i] != null) { mid += towed[i].transform.position; c++; }
+            if (c == 0) { radius = 1f; return transform.position; }
+            mid /= c;
+
+            float far = 0f, biggest = 0f;
+            for (int i = 0; i < towed.Count; i++)
+            {
+                if (towed[i] == null) continue;
+                Vector3 d = towed[i].transform.position - mid; d.y = 0f;
+                if (d.magnitude > far) far = d.magnitude;
+                if (towed[i].SizeRadius > biggest) biggest = towed[i].SizeRadius;
+            }
+            radius = Mathf.Max(0.5f, far + biggest);
+            return mid;
         }
 
         /// <summary>

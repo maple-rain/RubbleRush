@@ -50,6 +50,17 @@ namespace Demo.Collection
         /// <summary>바닥 평면 좌표. 판정이 2D라 XZ만 쓴다.</summary>
         public Vector2 FlatPosition => new Vector2(transform.position.x, transform.position.z);
 
+        /// <summary>
+        /// 주머니 모형(<see cref="NetPocket"/>)이 쓰는 직전 위치 — 베를레의 속도가 여기 들어 있다
+        /// [2026-10-08].
+        ///
+        /// <b>왜 NetPocket이 아니라 조각이 들고 있는가.</b> 구멍이 하나씩 삼키면 견인 목록
+        /// 중간이 빠져 뒤가 당겨진다. 속도를 <b>인덱스로</b> 들고 있으면 그 순간 옆 조각의
+        /// 속도를 물려받아, 삼키는 동안 — 즉 제일 잘 보이는 순간에 — 짐이 엉뚱하게 튄다.
+        /// 조각이 자기 것을 들고 있으면 순서가 어떻게 바뀌든 안 섞인다.
+        /// </summary>
+        public Vector3 TowPrev { get; set; }
+
         Renderer rend;
         Vector3 baseScale;
         Vector3 fallFrom, fallTo;
