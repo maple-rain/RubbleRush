@@ -91,6 +91,13 @@ namespace Demo.EditorTools
 
             s.MaxR = maxR;
             s.NearHand = near;
+            // <b>속도는 하네스가 직접 잰다</b> [2026-10-08]. NetPocket도 같은 값을 들고 있지만
+            // 그걸 쓰면 Slots 쪽에는 댈 자가 없어 "주머니만 튕긴다"가 공짜로 나온다.
+            // 두 모형 다 트랜스폼이 프레임 사이에 얼마나 움직였는가로 잰다 — 같은 자다.
+            Speeds(towed, s);
+            s.MoveInertia = tow.Pocket.MoveInertia;
+            s.MoveContain = tow.Pocket.MoveContain;
+            s.MoveSeparate = tow.Pocket.MoveSeparate;
             s.Escaped = tow.Pocket.Escaped;
             s.Overlaps = tow.Pocket.Overlaps;
             s.Contacts = tow.Pocket.Contacts;
@@ -99,6 +106,38 @@ namespace Demo.EditorTools
             if (tow.Shape == CargoTow.HaulShape.Slots) CountForSlots(tow, s);
             return s;
         }
+
+        /// <summary>
+        /// 프레임 사이 이동량으로 속도를 낸다 — <b>튕김을 재는 자다</b> [2026-10-08].
+        /// 플레이어는 6m/s로 간다. 끌려오는 돌덩이가 그보다 훨씬 빠르면 끌리는 게 아니라 튕기는 것이다.
+        /// </summary>
+        static readonly List<Vector3> s_was = new List<Vector3>(64);
+
+        static void Speeds(IReadOnlyList<Debris> towed, Sample s)
+        {
+            if (s_was.Count != towed.Count)
+            {
+                s_was.Clear();
+                for (int i = 0; i < towed.Count; i++) s_was.Add(towed[i].transform.position);
+                return;                                  // 첫 프레임은 기준이 없다
+            }
+
+            float sum = 0f, max = 0f;
+            for (int i = 0; i < towed.Count; i++)
+            {
+                Vector3 now = towed[i].transform.position;
+                Vector3 d = now - s_was[i]; d.y = 0f;
+                float sp = d.magnitude * 60f;            // dt = 1/60 고정
+                sum += sp;
+                if (sp > max) max = sp;
+                s_was[i] = now;
+            }
+            s.MeanSpeed = towed.Count > 0 ? sum / towed.Count : 0f;
+            s.MaxSpeed = max;
+        }
+
+        /// <summary>새 경우를 시작할 때 부른다 — 앞 경우의 위치가 남으면 첫 속도가 터진다.</summary>
+        internal static void ResetSpeeds() => s_was.Clear();
 
         /// <summary>
         /// Slots 모형에도 같은 자를 댄다. 안 그러면 "새어 나감 0·겹침 0"이 구속의 성과처럼 보이는데,

@@ -34,25 +34,53 @@ namespace Demo.EditorTools
             var csv = new StringBuilder();
             csv.AppendLine("# 주머니 솔버 값 쓸기 — t5_solid 잔해 32개 반경 1.17m, 같은 경로 [2026-10-08]");
             csv.AppendLine("# iters는 수렴(겹침·샘이 0으로 가는가), give/drag는 기획 값(모양)");
-            csv.AppendLine("iters,ropeGive,groundDrag,net_aspect,rear_share,nearHand_m,escaped,overlaps,contacts,ms_per_frame");
+            csv.AppendLine("type,iters,ropeGive,groundDrag,bounce,net_aspect,rear_share,nearHand_m,overlaps,mean_speed,max_speed,move_inertia,move_contain,move_separate,ms_per_frame");
 
+            sb.AppendLine("<b>'구속요구'는 상한에 걸리기 전에 솔버가 요구한 이동량이다</b> — " +
+                          "실제 이동이 아니다. 상한을 조이면 이 값은 커지는 게 정상이다.");
             sb.AppendLine($"주머니 값 쓸기 — {Case.name} (잔해 {Case.count}개 · 반경 {Case.radius}m), " +
                           "6초 직진 → 90도 회전 → 4초 직진 [2026-10-08]");
             sb.AppendLine();
 
+            sb.AppendLine("[0] 튕김 — 떼어낸 밀기가 속도로 얼마나 남는가 [기획자 지적 2026-10-08]");
+            sb.AppendLine("    1.00이 2026-10-08에 플레이한 그 동작이다. 플레이어는 6m/s로 간다.");
+            sb.AppendLine("    <b>종류마다 따로 본다</b> — 견고 32개는 짐이 그물에 안 들어가 꽉 끼므로");
+            sb.AppendLine("    분리 밀기가 감쇠로 작동한다. 거기 수치로 다른 종류를 판단하면 거꾸로 읽는다.");
+            Bounce(sb, csv);
+
+            sb.AppendLine();
+            sb.AppendLine("[0b] 한 프레임 이동 상한 — 총량을 묶는다. 플레이어는 0.10m/프레임 간다");
+            sb.AppendLine("     단계별로 손질해도 속도가 통만 바꿔 담기므로 합계를 묶는 쪽을 본다");
+            foreach (var cs in PocketCompare.Cases)
+            {
+                if (cs.name != "t3_normal" && cs.name != "t5_solid") continue;
+                sb.AppendLine();
+                sb.AppendLine($"  -- {cs.name} --");
+                sb.AppendLine(Head());
+                foreach (float st in new[] { 0.08f, 0.12f, 0.20f, 0.35f, 0.60f })
+                {
+                    PocketCompare.Override = (2, 0.35f, 0.12f, Keep, st);
+                    PocketCompare.Drive(CargoTow.HaulShape.Pocket, cs,
+                                        out List<PocketCompare.Sample> log, out double ms);
+                    PocketCompare.Override = null;
+                    Fold(sb, csv, cs.name + " step" + F(st), 2, 0.35f, 0.12f, Keep, log, ms);
+                }
+            }
+
+            sb.AppendLine();
             sb.AppendLine("[1] 반복 횟수 — 겹침과 샘이 0으로 가는가 (수렴 문제, 숫자가 정한다)");
             sb.AppendLine(Head());
-            foreach (int it in new[] { 1, 2, 3, 4, 6 }) One(sb, csv, it, 0.35f, 0.12f);
+            foreach (int it in new[] { 1, 2, 3, 4, 6 }) One(sb, csv, it, 0.35f, 0.12f, Keep, Step);
 
             sb.AppendLine();
             sb.AppendLine("[2] 그물의 무름 — 0이면 쇠틀, 1이면 종잇장 (기획 값)");
             sb.AppendLine(Head());
-            foreach (float g in new[] { 0.05f, 0.2f, 0.35f, 0.6f, 0.9f }) One(sb, csv, 4, g, 0.12f);
+            foreach (float g in new[] { 0.05f, 0.2f, 0.35f, 0.6f, 0.9f }) One(sb, csv, 2, g, 0.12f, Keep, Step);
 
             sb.AppendLine();
             sb.AppendLine("[3] 바닥 마찰 — 잔해가 얼마나 끈적하게 끌려오는가 (기획 값)");
             sb.AppendLine(Head());
-            foreach (float d in new[] { 0.02f, 0.06f, 0.12f, 0.25f, 0.5f }) One(sb, csv, 4, 0.35f, d);
+            foreach (float d in new[] { 0.02f, 0.06f, 0.12f, 0.25f, 0.5f }) One(sb, csv, 2, 0.35f, d, Keep, Step);
 
             string path = "Tools/balance/pocket_tuning.csv";
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -63,15 +91,49 @@ namespace Demo.EditorTools
             Debug.Log(sb.ToString());
         }
 
-        static void One(StringBuilder sb, StringBuilder csv, int iters, float give, float drag)
+        /// <summary>
+        /// 튕김만 종류별로 쓴다. 기획자가 플레이한 것은 일반 건물(12조각)이고,
+        /// 거기서 "잔해끼리 튕기는 정도가 너무 크다"가 나왔다.
+        /// </summary>
+        static void Bounce(StringBuilder sb, StringBuilder csv)
         {
-            PocketCompare.Override = (iters, give, drag);
+            foreach (var cs in PocketCompare.Cases)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"  -- {cs.name} (조각 {cs.count}개 · 반경 {cs.radius}m) --");
+                sb.AppendLine(Head());
+                foreach (float b in new[] { 0f, 0.15f, 0.35f, 0.6f, 1f })
+                {
+                    PocketCompare.Override = (2, 0.35f, 0.12f, b, Step);
+                    PocketCompare.Drive(CargoTow.HaulShape.Pocket, cs,
+                                        out List<PocketCompare.Sample> log, out double ms);
+                    PocketCompare.Override = null;
+                    Fold(sb, csv, cs.name, 2, 0.35f, 0.12f, b, log, ms);
+                }
+            }
+            sb.AppendLine();
+        }
+
+        /// <summary>다른 쓸기에서 고정해 두는 기본값.</summary>
+        const float Keep = 0.15f, Step = 0.6f;
+
+        static void One(StringBuilder sb, StringBuilder csv, int iters, float give, float drag,
+                        float bounce, float step)
+        {
+            PocketCompare.Override = (iters, give, drag, bounce, step);
             PocketCompare.Drive(CargoTow.HaulShape.Pocket, Case,
                                 out List<PocketCompare.Sample> log, out double ms);
             PocketCompare.Override = null;
+            Fold(sb, csv, Case.name, iters, give, drag, bounce, log, ms);
+        }
+
+        static void Fold(StringBuilder sb, StringBuilder csv, string type, int iters, float give,
+                         float drag, float bounce, List<PocketCompare.Sample> log, double ms)
+        {
 
             // 마지막 2초만 본다 — 그때쯤이면 자리를 잡는다. 앞쪽은 펼쳐지는 과도기다
             float aspect = 0, bias = 0, near = 0, esc = 0, ovl = 0, con = 0;
+            float mean = 0, top = 0, mi = 0, mc = 0, ms2 = 0;
             int c = 0;
             foreach (PocketCompare.Sample s in log)
             {
@@ -79,22 +141,26 @@ namespace Demo.EditorTools
                 aspect += s.NetAcross > 1e-3f ? s.NetAlong / s.NetAcross : 0f;
                 bias += s.RearShare; near += s.NearHand;
                 esc += s.Escaped; ovl += s.Overlaps; con += s.Contacts;
+                mean += s.MeanSpeed; top += s.MaxSpeed;
+                mi += s.MoveInertia; mc += s.MoveContain; ms2 += s.MoveSeparate;
                 c++;
             }
             if (c == 0) return;
             float inv = 1f / c;
 
-            sb.AppendLine(string.Format("  {0,-6}{1,-9}{2,-9}{3,9}{4,9}{5,10}{6,8}{7,9}{8,9}{9,10}",
-                iters, F(give), F(drag), F(aspect * inv), F(bias * inv), F(near * inv),
-                F(esc * inv), F(ovl * inv), F(con * inv), ms.ToString("F4")));
+            sb.AppendLine(string.Format("  {0,-5}{1,-7}{2,-7}{3,-7}{4,9}{5,8}{6,9}{7,10}{8,9}{9,9}",
+                iters, F(give), F(drag), F(bounce), F(aspect * inv), F(bias * inv),
+                F(ovl * inv), F(mean * inv), F(top * inv),
+                F(mi * inv) + "/" + F(mc * inv) + "/" + F(ms2 * inv)));
 
-            csv.AppendLine(string.Join(",", iters, F(give), F(drag), F(aspect * inv), F(bias * inv),
-                F(near * inv), F(esc * inv), F(ovl * inv), F(con * inv),
+            csv.AppendLine(string.Join(",", type, iters, F(give), F(drag), F(bounce), F(aspect * inv),
+                F(bias * inv), F(near * inv), F(ovl * inv), F(mean * inv), F(top * inv),
+                F(mi * inv), F(mc * inv), F(ms2 * inv),
                 ms.ToString("F4", CultureInfo.InvariantCulture)));
         }
 
-        static string Head() => string.Format("  {0,-6}{1,-9}{2,-9}{3,9}{4,9}{5,10}{6,8}{7,9}{8,9}{9,10}",
-            "반복", "무름", "마찰", "그물비율", "뒤쪽", "손까지", "샘", "겹침", "접촉", "ms");
+        static string Head() => string.Format("  {0,-5}{1,-7}{2,-7}{3,-7}{4,9}{5,8}{6,9}{7,10}{8,9}{9,9}",
+            "반복", "무름", "마찰", "튕김", "그물비율", "뒤쪽", "겹침", "평균속m/s", "최고속", "구속요구 관성/테두리/분리 m");
 
         static string F(float v) => v.ToString("F2", CultureInfo.InvariantCulture);
     }

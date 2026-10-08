@@ -33,7 +33,7 @@ namespace Demo.EditorTools
         /// 튜닝 도구가 쓸어 보려고 끼우는 값. null이면 인스펙터 기본값을 쓴다 [2026-10-08].
         /// 수렴하는지는 재 봐야 알지 추론할 일이 아니다.
         /// </summary>
-        internal static (int iters, float give, float drag)? Override;
+        internal static (int iters, float give, float drag, float bounce, float step)? Override;
 
         /// <summary>
         /// 켜면 직진 중 한 순간의 <b>기하</b>를 그대로 받아 적는다 — 테두리 점과 조각의 좌표다.
@@ -73,6 +73,8 @@ namespace Demo.EditorTools
             public float T;
             public float Along, Across;  // 잔해 덩어리의 앞뒤 / 좌우 폭
             public float NetAlong, NetAcross;
+            public float MeanSpeed, MaxSpeed;   // 튕김을 재는 자. 플레이어는 6m/s다
+            public float MoveInertia, MoveContain, MoveSeparate;   // 그 이동이 어디서 왔는가
             public float RearShare;     // 뒤쪽 절반에 든 조각의 비율. 0.5면 고르게, 1이면 다 뒤에  // <b>그물</b>의 앞뒤 / 좌우 폭 — 타원은 그물의 것이다
             public float Bias;           // 무게중심이 뒤로 치우친 거리(m). +면 뒤쪽
             public float MaxR;           // 매듭에서 가장 먼 조각까지
@@ -87,7 +89,7 @@ namespace Demo.EditorTools
             var csv = new StringBuilder();
             csv.AppendLine("# 투망 주머니 vs 해바라기 슬롯 — 같은 경로·같은 dt로 실측 [2026-10-08]");
             csv.AppendLine("# 경로: 6초 직진 → 90도 좌회전 → 4초 직진. dt=1/60. 걸림(14번) 없음");
-            csv.AppendLine("shape,type,phase,net_along_m,net_across_m,net_aspect,rear_share,maxR_m,nearHand_m,escaped,overlaps,contacts,ms_per_frame");
+            csv.AppendLine("shape,type,phase,net_along_m,net_across_m,net_aspect,rear_share,maxR_m,nearHand_m,mean_speed,max_speed,overlaps,ms_per_frame");
 
             Snapshot = new StringBuilder();
             sb.AppendLine("투망 주머니 비교 — 같은 경로를 두 모형으로 끈다 [2026-10-08]");
@@ -99,7 +101,7 @@ namespace Demo.EditorTools
                 int n = cs.count;
                 sb.AppendLine($"── {cs.name} — 잔해 {n}개 · 반경 {cs.radius:F2}m · 흩어짐 {cs.scatter:F1}m ──");
                 sb.AppendLine(Row("모형", "국면", "그물앞뒤", "그물좌우", "그물비율", "치우침",
-                                  "뒤쪽", "손까지", "샘", "겹침", "접촉", "ms"));
+                                  "뒤쪽", "손까지", "평균속", "최고속", "겹침", "ms"));
                 foreach (CargoTow.HaulShape shape in new[] { CargoTow.HaulShape.Slots,
                                                              CargoTow.HaulShape.Pocket })
                 {
@@ -173,6 +175,7 @@ namespace Demo.EditorTools
             player.transform.rotation = Quaternion.identity;
             tow.Add(debris);
 
+            ResetSpeeds();   // 앞 경우의 위치가 남아 있으면 첫 프레임 속도가 터진다
             var sw = new System.Diagnostics.Stopwatch();
             int frames = 0;
             float t = 0f;
@@ -252,6 +255,8 @@ namespace Demo.EditorTools
                 tow.Pocket.Iterations = Override.Value.iters;
                 tow.Pocket.RopeGive = Override.Value.give;
                 tow.Pocket.GroundDrag = Override.Value.drag;
+                tow.Pocket.Bounce = Override.Value.bounce;
+                tow.Pocket.MaxStep = Override.Value.step;
             }
         }
 
@@ -266,27 +271,27 @@ namespace Demo.EditorTools
 
             foreach (var ph in phases)
             {
-                float along = 0, across = 0, bias = 0, maxR = 0, near = 0;
-                float esc = 0, ovl = 0, con = 0;
+                float along = 0, across = 0, rear = 0, maxR = 0, near = 0;
+                float mean = 0, top = 0, ovl = 0;
                 int c = 0;
                 foreach (Sample s in log)
                 {
                     if (s.T < ph.a || s.T > ph.b) continue;
-                    along += s.NetAlong; across += s.NetAcross; bias += s.RearShare;
+                    along += s.NetAlong; across += s.NetAcross; rear += s.RearShare;
                     maxR += s.MaxR; near += s.NearHand;
-                    esc += s.Escaped; ovl += s.Overlaps; con += s.Contacts;
+                    mean += s.MeanSpeed; top += s.MaxSpeed; ovl += s.Overlaps;
                     c++;
                 }
                 if (c == 0) continue;
                 float inv = 1f / c;
-                along *= inv; across *= inv; bias *= inv; maxR *= inv; near *= inv;
-                esc *= inv; ovl *= inv; con *= inv;
+                along *= inv; across *= inv; rear *= inv; maxR *= inv; near *= inv;
+                mean *= inv; top *= inv; ovl *= inv;
                 float aspect = across > 1e-3f ? along / across : 0f;
 
                 sb.AppendLine(Row(shape.ToString(), ph.name, F(along), F(across), F(aspect),
-                                  F(bias), F(maxR), F(near), F(esc), F(ovl), F(con), ms.ToString("F4")));
+                                  F(rear), F(maxR), F(near), F(mean), F(top), F(ovl), ms.ToString("F4")));
                 csv.AppendLine(string.Join(",", shape, n, ph.name, F(along), F(across), F(aspect),
-                                           F(bias), F(maxR), F(near), F(esc), F(ovl), F(con),
+                                           F(rear), F(maxR), F(near), F(mean), F(top), F(ovl),
                                            ms.ToString("F4", CultureInfo.InvariantCulture)));
             }
         }

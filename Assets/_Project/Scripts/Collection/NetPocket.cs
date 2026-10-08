@@ -27,7 +27,7 @@ namespace Demo.Collection
     /// 따로 본다. 여기서는 <b>그물과 잔해</b>, <b>잔해끼리</b>만 푼다.
     /// </summary>
     [System.Serializable]
-    public sealed class NetPocket
+    public sealed partial class NetPocket
     {
         [SerializeField, Range(1, 6), Tooltip("구속을 몇 번 반복해 풀 것인가.\n" +
                  "더 돌린다고 덜 겹치지 않는다 — 실측(견고 32개): 2회 28.6쌍 · 4회 33.1 · 6회 34.4로 " +
@@ -47,11 +47,22 @@ namespace Demo.Collection
                  "테두리가 한 점으로 무너졌다 (실측: 가로세로비 0, 비용 7배). 1에서는 구속이 사라진다")]
         float ropeGive = 0.35f;
 
-        [SerializeField, Tooltip("한 프레임에 잔해가 움직일 수 있는 최대 거리(m). " +
-                 "그물이 빨리 지나갈 때 잔해를 뚫고 나가는 것을 막는다")]
-        float maxStep = 0.6f;
+        [SerializeField, Range(0f, 1f), Tooltip("구속을 풀 때 그 밀기가 <b>속도로 남는 정도</b>. " +
+                 "테두리 밀기와 잔해끼리 떼어내기에 똑같이 걸린다.\n" +
+                 "0이면 보정이 속도를 안 바꾼다 — 잔해가 테두리를 <b>따라만</b> 가고 안 튕긴다.\n" +
+                 "1이면 파고든 깊이가 그대로 속도가 된다 (0.28m면 17m/s). 안쪽까지 날아갔다가 " +
+                 "그물이 따라와 또 밀어 진동한다 — 2026-10-08 플레이에서 나온 증상이다.\n" +
+                 "깊이는 물리량이 아니라 이산 시간이 만든 부스러기다. 돌은 그물과 같은 속도로 가야 한다")]
+        float bounce = 0.15f;
 
-        Vector3[] pos, prev;
+        [SerializeField, Tooltip("한 프레임에 잔해가 움직일 수 있는 최대 거리(m).\n" +
+                 "플레이어는 60fps에서 0.10m/프레임 간다 — 그 몇 배까지 봐줄 것인가다.\n" +
+                 "실측(일반 12조각): 0.60이면 최고속 25.4m/s로 눈에 띄게 튕기고, 0.12면 7.2m/s로 " +
+                 "끌려오는 것으로 보인다. 그러면서 타원(1.61→1.74)과 뒤쪽 쏠림(100%)은 그대로다.\n" +
+                 "0.08까지 조이면 솔버가 못 따라가 겹친 쌍이 6.4→48.1로 터진다")]
+        float maxStep = 0.12f;
+
+        Vector3[] pos, prev, start;
         float[] rad;
         int count;
 
@@ -61,6 +72,8 @@ namespace Demo.Collection
         // 튜닝 도구가 쓸어 보기 위한 입구. 값은 기획자가 정한다 — 여기 기본값은 [제안·미승인]이다.
         public int Iterations { get => iterations; set => iterations = Mathf.Clamp(value, 1, 6); }
         public float RopeGive { get => ropeGive; set => ropeGive = Mathf.Clamp(value, 0.05f, 0.95f); }
+        public float Bounce { get => bounce; set => bounce = Mathf.Clamp01(value); }
+        public float MaxStep { get => maxStep; set => maxStep = Mathf.Max(0.01f, value); }
         public float GroundDrag { get => groundDrag; set => groundDrag = Mathf.Clamp01(value); }
 
         public Vector3 PositionOf(int i) => pos[i];
@@ -78,6 +91,27 @@ namespace Demo.Collection
         /// <summary>테두리를 밀고 있는 접촉 수. 0이면 잔해가 그물에 안 닿아 모양이 안 변한다.</summary>
         public int Contacts { get; private set; }
 
+        /// <summary>
+        /// 잔해의 평균·최고 속도(m/s). <b>튕김을 재는 자다</b> [2026-10-08].
+        ///
+        /// 끌려오는 돌덩이는 플레이어 속도(6m/s) 안팎으로 움직여야 한다. 그보다 훨씬 빠르면
+        /// 끌리는 것이 아니라 <b>튕기는</b> 것이다 — 13번 작업에서 "짐 최고속 37.2m/s =
+        /// 플레이어의 6.2배"로 같은 자를 썼다.
+        /// </summary>
+        public float MeanSpeed { get; private set; }
+
+        public float MaxSpeed { get; private set; }
+
+        /// <summary>
+        /// 한 프레임의 이동을 <b>단계별로</b> 나눠 본다 (m) — 튕김의 범인을 찾는 자다 [2026-10-08].
+        /// 관성 / 테두리가 민 것 / 서로 떼어낸 것. 합이 곧 그 프레임의 이동이다.
+        /// </summary>
+        public float MoveInertia { get; private set; }
+
+        public float MoveContain { get; private set; }
+
+        public float MoveSeparate { get; private set; }
+
         /// <summary>조각 수에 맞춰 자리를 잡는다. 늘어날 때만 다시 잡는다 — 매 프레임 new 하지 않는다.</summary>
         public void Begin(int n)
         {
@@ -86,6 +120,7 @@ namespace Demo.Collection
                 int cap = Mathf.NextPowerOfTwo(Mathf.Max(8, n));
                 System.Array.Resize(ref pos, cap);
                 System.Array.Resize(ref prev, cap);
+                System.Array.Resize(ref start, cap);
                 System.Array.Resize(ref rad, cap);
             }
             count = n;
@@ -115,49 +150,18 @@ namespace Demo.Collection
             // <b>가두고 나서 떼어낸다</b>, 그 반대가 아니다 [고침 2026-10-08].
             // 떼어낸 뒤에 가두면 마지막 한 수가 안쪽으로 미는 것이라 다시 겹친다 —
             // 실측에서 잔해 32개일 때 겹친 쌍이 15개로 남았다.
+            MoveInertia = MoveContain = MoveSeparate = 0f;
+            for (int i = 0; i < count; i++) start[i] = pos[i];
+
             Integrate(dt);
             for (int k = 0; k < iterations; k++)
             {
                 Contain(rope);
                 Separate();
             }
+            Brake();
             Count_(rope);
-        }
-
-        /// <summary>① 적분 — 테두리와 같은 베를레다. 속도는 (지금 − 직전)에 들어 있다.</summary>
-        void Integrate(float dt)
-        {
-            float keep = 1f - Mathf.Clamp01(groundDrag);
-            float lim = Mathf.Max(0.01f, maxStep);
-            for (int i = 0; i < count; i++)
-            {
-                Vector3 v = (pos[i] - prev[i]) * keep;
-                v.y = 0f;
-                if (v.sqrMagnitude > lim * lim) v = v.normalized * lim;
-                prev[i] = pos[i];
-                pos[i] += v;
-            }
-        }
-
-        /// <summary>
-        /// ② 잔해끼리 밀어낸다. <b>이것이 "끝쪽에 모인다"를 만든다</b> —
-        /// 뒤쪽 테두리에 눌린 조각이 뒤에 오는 조각을 받아 주므로 더미가 쌓인다.
-        /// 밀어내기가 없으면 전부 테두리 한 줄에 달라붙고 가운데가 빈다.
-        /// </summary>
-        void Separate()
-        {
-            for (int i = 0; i < count; i++)
-                for (int j = i + 1; j < count; j++)
-                {
-                    Vector3 d = pos[j] - pos[i]; d.y = 0f;
-                    float need = rad[i] + rad[j];
-                    float sq = d.sqrMagnitude;
-                    if (sq >= need * need || sq < 1e-8f) continue;
-
-                    float len = Mathf.Sqrt(sq);
-                    Vector3 fix = d * ((need - len) / len * 0.5f);
-                    pos[i] -= fix; pos[j] += fix;
-                }
+            Speeds(dt);
         }
 
         /// <summary>
@@ -169,6 +173,7 @@ namespace Demo.Collection
             int n = rope.Count;
             Vector3 cen = rope.Centroid;
             float give = Mathf.Clamp(ropeGive, 0.05f, 0.95f);
+            float keepVel = 1f - Mathf.Clamp01(bounce);
 
             for (int k = 0; k < count; k++)
             {
@@ -196,43 +201,28 @@ namespace Demo.Collection
                 }
 
                 if (hit < 0) continue;
-                pos[k] += hitDir * (worst * (1f - give));
+                Vector3 fix = hitDir * (worst * (1f - give));
+                if (fix.magnitude > MoveContain) MoveContain = fix.magnitude;
+
+                // <b>테두리 밀기도 투영이다</b> [고침 2026-10-08].
+                //
+                // 위치만 옮기면 <b>파고든 깊이가 그대로 속도가 된다</b> — 0.28m면 17m/s다.
+                // 그 속도로 안쪽까지 날아갔다가 그물이 따라와 또 밀고, 그게 진동이다.
+                // 실측(일반 12조각): 한 프레임 이동의 지배항이 관성 0.35m(21m/s)였고,
+                // 그 관성은 전 프레임의 테두리 밀기가 남긴 것이었다.
+                //
+                // 파고든 깊이는 물리량이 아니라 <b>이산 시간이 만든 부스러기</b>다. 그물이 돌을
+                // 밀면 돌은 그물과 <b>같은 속도</b>로 가야 한다 — 깊이÷dt로 가면 안 된다.
+                // 직전 위치를 같이 옮기면 보정이 속도로 안 남고, 다음 프레임에 테두리가 또
+                // 밀어 주므로 결국 <b>테두리를 따라간다</b>. 그게 비탄성 접촉이다.
+                pos[k] += fix;
+                prev[k] += fix * keepVel;
+
                 rope.Push(hit, hitDir * (-worst * give * (1f - hitT)));
                 rope.Push((hit + 1) % n, hitDir * (-worst * give * hitT));
             }
 
             rope.Relax();   // 밀린 테두리의 길이 구속을 다시 맞춘다
-        }
-
-        /// <summary>실측용 집계. 주장을 숫자로 돌려준다.</summary>
-        void Count_(CableRope rope)
-        {
-            Escaped = Overlaps = Contacts = 0;
-            int n = rope.Count;
-            Vector3 cen = rope.Centroid;
-
-            for (int i = 0; i < count; i++)
-                for (int j = i + 1; j < count; j++)
-                {
-                    Vector3 d = pos[j] - pos[i]; d.y = 0f;
-                    float need = rad[i] + rad[j];
-                    if (d.sqrMagnitude < need * need - 1e-4f) Overlaps++;
-                }
-
-            for (int k = 0; k < count; k++)
-            {
-                bool out_ = false, touch = false;
-                for (int i = 0; i < n; i++)
-                {
-                    Vector3 c = ClosestOnSegment(rope.At(i), rope.At((i + 1) % n), pos[k], out _);
-                    Vector3 away = pos[k] - c; away.y = 0f;
-                    Vector3 inward = cen - c; inward.y = 0f;
-                    if (Vector3.Dot(away, inward) < 0f) out_ = true;
-                    if (away.magnitude < rad[k] + 0.05f) touch = true;
-                }
-                if (out_) Escaped++;
-                if (touch) Contacts++;
-            }
         }
 
         static Vector3 ClosestOnSegment(Vector3 a, Vector3 b, Vector3 q, out float t)
@@ -245,6 +235,6 @@ namespace Demo.Collection
             return a + ab * t;
         }
 
-        public void Clear() { count = 0; Escaped = Overlaps = Contacts = 0; }
+        public void Clear() { count = 0; Escaped = Overlaps = Contacts = 0; MeanSpeed = MaxSpeed = 0f; }
     }
 }
