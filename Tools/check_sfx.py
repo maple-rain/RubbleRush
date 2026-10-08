@@ -95,6 +95,28 @@ def measure(path):
     )
 
 
+def difference_db(folder, name_a, name_b):
+    """두 음원이 얼마나 다른가 — 차이의 RMS를 신호 RMS 대비 dB로. 작을수록 닮았다.
+
+    완전히 같은 파일이면 -inf에 가깝고, 서로 다른 소음이면 0 dB 언저리가 된다.
+    길이가 다르면 짧은 쪽에 맞춰 비교한다 — 앞부분이 같으면 같은 소리로 들린다.
+    """
+    try:
+        a, _, _, _ = read(os.path.join(folder, name_a + '.wav'))
+        b, _, _, _ = read(os.path.join(folder, name_b + '.wav'))
+    except Exception:
+        return None
+    n = min(a.size, b.size)
+    if n == 0:
+        return None
+    a, b = a[:n], b[:n]
+    sig = float(np.sqrt(np.mean(a * a)))
+    dif = float(np.sqrt(np.mean((a - b) ** 2)))
+    if sig <= 1e-9:
+        return None
+    return db(dif / sig)
+
+
 def group_of(name):
     """SFX_Strike_02 -> Strike"""
     n = name[4:] if name.startswith('SFX_') else name
@@ -167,20 +189,46 @@ def main():
                  r['clipped'],
                  ' · '.join(notes) if notes else 'O'))
 
-    # ── 변형끼리 고른가 ────────────────────────────────────────
+    # ── 변형끼리 고른가, 그리고 <b>서로 다르기는 한가</b> ───────
     print()
-    print('변형끼리의 음량 차 (같은 소리인데 하나만 크면 반복이 티 난다)')
+    print('변형끼리 — 음량이 고른가, 그리고 서로 다르기는 한가')
+    print('  변형을 여럿 두는 유일한 이유가 "반복이 기계처럼 들려서"다.')
+    print('  사실상 같은 파일이 둘이면 그 이유가 사라지고 용량만 는다.')
     groups = {}
     for r in rows:
         if not r['empty']:
             groups.setdefault(group_of(r['name']), []).append(r)
+
+    dup = 0
     for g, rs in sorted(groups.items()):
         if len(rs) < 2:
             continue
         spread = max(x['rms_db'] for x in rs) - min(x['rms_db'] for x in rs)
         span = max(x['seconds'] for x in rs) - min(x['seconds'] for x in rs)
-        print('  %-16s 변형 %d개 · RMS 차 %4.1f dB · 길이 차 %.2fs  %s'
-              % (g, len(rs), spread, span, '고르다' if spread <= 6 else '들쭉날쭉'))
+
+        # 가장 닮은 한 쌍을 찾는다. 차이를 신호 대비 dB로 재면 길이·음량과 무관하다.
+        worst = 999.0
+        pair = ''
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                diff = difference_db(d, rs[i]['name'], rs[j]['name'])
+                if diff is not None and diff < worst:
+                    worst = diff
+                    pair = '%s↔%s' % (rs[i]['name'][-2:], rs[j]['name'][-2:])
+
+        notes = []
+        if spread > 6:
+            notes.append('음량 들쭉날쭉')
+        if worst < -30:
+            notes.append('%s가 사실상 같은 파일 (%.0f dB)' % (pair, worst))
+            dup += 1
+        print('  %-16s 변형 %d개 · RMS 차 %4.1f dB · 길이 차 %.2fs · 최소 차이 %5.1f dB  %s'
+              % (g, len(rs), spread, span, worst if worst < 900 else float('nan'),
+                 ' · '.join(notes) if notes else '고르고 서로 다르다'))
+
+    if dup:
+        print()
+        print('  똑같은 변형을 가진 소리 %d가지 — 변형을 하나로 줄이거나 실제로 다르게 만들 것.' % dup)
 
     print()
     print('짚인 파일 %d / %d. 이 도구는 "좋게 들리는가"는 못 잰다 — 그건 듣고 정할 일이다.'
