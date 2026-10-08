@@ -39,6 +39,25 @@ namespace Demo.Utils
         /// <summary>실측·디버그용. 지난 프레임까지 울린 횟수.</summary>
         public int PlayedCount { get; private set; }
 
+        /// <summary>
+        /// <see cref="SoundBank.Entry.minGap"/>에 막혀 <b>안 울린</b> 횟수 [2026-10-08].
+        ///
+        /// 씹히는 느낌의 두 원인 중 하나다. 다른 하나는 풀이 음성을 뺏는 것
+        /// (<see cref="SfxPool.Steals"/>) — 둘은 증상이 비슷한데 고치는 법이 정반대라
+        /// (이쪽은 간격을 줄이고, 저쪽은 음성을 늘리거나 소리를 짧게) 따로 세야 한다.
+        /// </summary>
+        public int SuppressedCount { get; private set; }
+
+        /// <summary>실측용. 소리를 내는 풀.</summary>
+        public SfxPool Pool => pool;
+
+        /// <summary>측정을 다시 시작한다.</summary>
+        public void ResetCounts()
+        {
+            PlayedCount = SuppressedCount = 0;
+            if (pool != null) pool.ResetCounts();
+        }
+
         void Awake()
         {
             s_current = this;
@@ -72,7 +91,7 @@ namespace Demo.Utils
             // 같은 소리가 한 프레임에 겹쳐 울리면 한 발보다 오히려 작게 들린다(위상 간섭).
             // 두드림처럼 잦은 소리에서 실제로 생기는 일이라 간격을 막아 둔다.
             float now = Time.unscaledTime;
-            if (e.minGap > 0f && now - e.LastAt < e.minGap) return;
+            if (e.minGap > 0f && now - e.LastAt < e.minGap) { SuppressedCount++; return; }
             e.LastAt = now;
 
             float pitch = 1f + Random.Range(-e.pitchJitter, e.pitchJitter);

@@ -66,14 +66,31 @@ namespace Demo.EditorTools
                     continue;
                 }
 
+                // 옆면·뒷면 공용. <b>입구를 지우는 것이 목적이다</b> [2026-10-08].
+                // 네 면에 정면도를 돌려 쓰니 어느 쪽에서 들어가도 문이 보였다 —
+                // 부수기 화면이 "무조건 정면"으로 보인 원인이 이것이다 (면 선택 자체는 멀쩡했다).
+                // 면마다 따로 뽑는 것은 종당 석 장이라 비싸고, 문만 없으면 대부분 해결된다.
+                byKey.TryGetValue("t_" + id + "_side", out Texture2D side);
+
                 var used = new List<string>();
                 for (int f = 0; f < Faces.Length; f++)
                 {
                     byKey.TryGetValue("t_" + id + "_" + Faces[f], out Texture2D tex);
-                    bool own = tex != null;
-                    if (!own) tex = front;                       // 전용이 없으면 앞면을 돌려 쓴다
+                    string how = Faces[f];
+
+                    if (tex == null && f != Destruction.StructureFace.Front && side != null)
+                    {
+                        tex = side;                              // 공용 측면
+                        how += "(측면)";
+                    }
+                    if (tex == null)
+                    {
+                        tex = front;                             // 그것도 없으면 앞면
+                        how += "(앞면)";
+                    }
+
                     so.FindProperty("facade" + Cap(Faces[f])).objectReferenceValue = tex;
-                    used.Add(own ? Faces[f] : Faces[f] + "(앞면)");
+                    used.Add(how);
                 }
                 // 파괴 단계 — 있으면 꽂고 없으면 비워 둔다.
                 // StructureData.FacadeForState가 없을 때 한 단계 앞의 것으로 물러선다.

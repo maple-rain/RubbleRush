@@ -15,7 +15,7 @@ rush.fastGap,0.1,탭 간격이 이보다 짧으면 러쉬 최대(초)
 rush.slowGap,0.3,탭 간격이 이보다 길면 러쉬 아님(초)
 rush.rate,2.5,러쉬 배속. 한 방이 탭 간격 안에 끝나야 주먹이 벽까지 간다
 rush.fade,2.5,안 때리면 러쉬가 빠지는 속도(초당)
-stop.strike,0.5,보통 두드림 정지 배수 (x GameConfig.hitStopSeconds)
+stop.strike,0.25,보통 두드림 정지 배수 (x GameConfig.hitStopSeconds) [제안 2026-10-08 미승인] 0.5=40ms(2.4프레임) 초당20% 정지였다. 0.25=20ms(1.2프레임) 초당10%
 stop.collapse,1,층 붕괴 정지 배수
 stop.broken,2.2,완파 정지 배수
 stop.rushFinish,3,러쉬 마무리 정지 배수

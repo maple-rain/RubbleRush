@@ -20,6 +20,39 @@ namespace Demo.Utils
         int next;
 
         /// <summary>
+        /// 울린 횟수 · <b>뺏은 횟수</b> · 동시에 울린 최대 수 [2026-10-08].
+        ///
+        /// <b>왜 세는가.</b> "소리가 씹히는 느낌"은 느낌으로만 남으면 고칠 수가 없다.
+        /// 뺏기는 것은 <b>울리던 소리를 중간에 끊는 일</b>이라 정확히 그 느낌을 만들고,
+        /// 여기서 세면 <b>몇 번 씹혔는지</b>가 바로 나온다. int 세 개라 비용이 없다.
+        /// </summary>
+        public int Plays { get; private set; }
+
+        /// <inheritdoc cref="Plays"/>
+        public int Steals { get; private set; }
+
+        /// <inheritdoc cref="Plays"/>
+        public int PeakBusy { get; private set; }
+
+        /// <summary>음성 수. 몇 개 중 몇 개를 쓰고 있는지 보려면 필요하다.</summary>
+        public int VoiceCount => voices != null ? voices.Length : 0;
+
+        /// <summary>지금 울리고 있는 음성의 수.</summary>
+        public int Busy
+        {
+            get
+            {
+                if (voices == null) return 0;
+                int n = 0;
+                for (int i = 0; i < voices.Length; i++) if (voices[i].isPlaying) n++;
+                return n;
+            }
+        }
+
+        /// <summary>측정을 다시 시작한다.</summary>
+        public void ResetCounts() { Plays = Steals = PeakBusy = 0; }
+
+        /// <summary>
         /// 이 부모 밑에 풀을 만들어 둔다. 이미 있으면 그것을 돌려준다 —
         /// 부르는 쪽이 있는지 없는지 신경 쓰지 않아도 된다.
         /// </summary>
@@ -71,6 +104,10 @@ namespace Demo.Utils
             if (clip == null || voices == null) return;
 
             AudioSource src = Take();
+            Plays++;
+            int busy = Busy;
+            if (busy > PeakBusy) PeakBusy = busy;
+
             src.transform.position = at;
             src.spatialBlend = flat ? 0f : 1f;
             src.clip = clip;
@@ -102,6 +139,10 @@ namespace Demo.Utils
                 startedAt[k] = Time.unscaledTime;
                 return voices[k];
             }
+
+            // 여기까지 왔다는 것은 쉬는 음성이 하나도 없다는 뜻이다 — 울리던 것을 끊는다.
+            // 이 횟수가 곧 "소리가 씹힌" 횟수다.
+            Steals++;
 
             int oldest = 0;
             for (int i = 1; i < voices.Length; i++)
