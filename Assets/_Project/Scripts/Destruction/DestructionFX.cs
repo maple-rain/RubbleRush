@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Demo.Data;
 using UnityEngine;
 
@@ -24,9 +24,10 @@ namespace Demo.Destruction
     /// | 층 붕괴 | 층마다 1회 | 강함 | 있음 |
     /// | 완파 | 건물마다 1회 | 가장 강함 | 가장 길다 |
     ///
-    /// 파티클과 소리는 아직 없다. 재료는 있다 —
-    /// <c>Assets/ThirdParty/Cartoon FX Remaster/</c>, <c>Casual Game Sounds U6</c>,
-    /// VARCO Sound. 붙일 때는 CLAUDE.md 규칙 6대로 <b>반드시 풀링</b>해야 한다.
+    /// <b>소리는 붙었다</b> [2026-10-08]. 네 박자가 그대로 <see cref="Data.Sfx"/>의 네 이름이 된다 —
+    /// 어떤 음원을 울릴지는 <see cref="Data.SoundBank"/> 에셋이 정하고, 재생은
+    /// <see cref="Utils.GameAudio"/>가 풀에서 한다 (CLAUDE.md 규칙 6).
+    /// 파티클은 아직 없다. 재료는 <c>Assets/ThirdParty/Cartoon FX Remaster/</c>에 있다.
     /// </summary>
     public sealed class DestructionFX : MonoBehaviour
     {
@@ -152,12 +153,18 @@ namespace Demo.Destruction
         {
             if (robot == null) robot = FindFirstObjectByType<Player.PlayerAnimator>();
             if (robot != null) robot.Punch(rightArm);
+            Utils.GameAudio.Play(Data.Sfx.Punch, transform.position);
         }
 
         public void OnStrike(float progress01, Vector3 point)
         {
             Impact(Mathf.Lerp(strikeShake, strikeShakeMax, Mathf.Clamp01(progress01)),
                    strikeShakeSeconds, strikeHitStop);
+
+            // 셰이크와 같은 곡선을 탄다 — 건물이 깎여 갈수록 소리도 커진다.
+            // 박자를 셋으로 나눈 이유(위 표)가 소리에도 그대로 적용된다.
+            Utils.GameAudio.Play(Data.Sfx.Strike, point,
+                                 Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(progress01)));
         }
 
         /// <summary>
@@ -167,12 +174,14 @@ namespace Demo.Destruction
         public void OnFloorCollapse(Vector3 point)
         {
             Impact(collapseShake, collapseShakeSeconds, collapseHitStop);
+            Utils.GameAudio.Play(Data.Sfx.FloorCollapse, point);
         }
 
         /// <summary>대상이 완전히 부서진 순간.</summary>
         public void OnBroken(Vector3 point)
         {
             Impact(brokenShake, brokenShakeSeconds, brokenHitStop);
+            Utils.GameAudio.Play(Data.Sfx.Broken, point);
         }
 
         /// <summary>

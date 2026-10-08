@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Demo.Core;
 using Demo.Data;
 using UnityEngine;
@@ -120,7 +120,7 @@ namespace Demo.Collection
             if (PolygonCapture.Area(polygon) < cfg.cableMinLoopArea)
             {
                 Clear();
-                return;
+                return;      // 소리도 안 낸다 — 고리를 그린 적이 없는 것으로 친다
             }
 
             // 견인 중인 잔해는 다시 잡지 않는다 — 이미 내 뒤에 딸려 있다.
@@ -135,6 +135,11 @@ namespace Demo.Collection
             LastCaptureCount = captured.Count;
 
             if (captured.Count > 0 && cargo != null) cargo.Add(captured);
+
+            // 잡았는가 못 잡았는가는 <b>이 게임의 핵심 피드백</b>이다 — 고리를 닫는 순간
+            // 플레이어는 화면이 아니라 손끝을 보고 있다. 소리로 갈라 준다.
+            Vector3 at = new Vector3(hit.x, transform.position.y, hit.y);
+            Utils.GameAudio.Play(captured.Count > 0 ? Data.Sfx.Capture : Data.Sfx.CableMiss, at);
 
             // 고리는 소모된다. 이어서 또 둘러싸면 CargoTow에서 합쳐진다.
             Clear();

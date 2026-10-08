@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace Demo.Collection
@@ -277,6 +277,7 @@ namespace Demo.Collection
             towed.Clear();
             TotalUnits = 0;
             Stow();
+            if (units > 0) Utils.GameAudio.Play(Data.Sfx.Drop, transform.position);
             return units;
         }
     }

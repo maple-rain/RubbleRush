@@ -1,4 +1,4 @@
-using Demo.Core;
+﻿using Demo.Core;
 using Demo.Data;
 using UnityEngine;
 
@@ -119,6 +119,10 @@ namespace Demo.Collection
                 grew = true;
             }
 
+            // 평면(2D)으로 낸다 — 단계 상승은 화면 전체의 사건이고, 3D로 두면
+            // 플레이어가 구멍에서 멀 때 가장 중요한 소리가 안 들린다.
+            if (grew) Utils.GameAudio.Play(Data.Sfx.HoleLevelUp, transform.position);
+
             if (grew)
                 Debug.Log($"[Hole] 구멍이 커졌다 — 단계 {Level} · 반경 {Radius:0.0}m" +
                           (IsMaxLevel ? " (최종)" : $" · 다음까지 {XpToNext - Xp}"));
@@ -209,6 +213,10 @@ namespace Demo.Collection
             if (cargo != null) cargo.Detach(d);   // 끌고 있던 것이면 화물에서 뺀다
 
             d.BeginFall(transform.position, fallSeconds, OnFallFinished);
+
+            // 큰 조각일수록 묵직하게. 한 번에 여러 개가 들어가면 SoundBank의 minGap이 솎는다.
+            Utils.GameAudio.Play(Data.Sfx.Swallow, d.transform.position,
+                                 Mathf.Lerp(0.6f, 1f, Mathf.Clamp01(units / 4f)));
 
             SwallowedUnits += units;
             loop.AddCollected(units);

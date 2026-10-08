@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -51,6 +51,53 @@ namespace Demo.EditorTools
              "A derelict concrete building finally collapsing into a pile of rubble. A huge low boom, " +
              "a long crumbling roar of falling debris, settling dust. Heavy and final. No music.",
              2),
+
+            // ── 아래 아홉은 아직 안 만들었다 [2026-10-08]. 이름은 Demo.Data.Sfx와 같아야
+            //    Demo/16이 알아서 꽂는다 (SFX_<이름>_NN.wav 규칙).
+            ("Punch",
+             "A large hydraulic robot arm swinging fast through the air. A short heavy servo whirr " +
+             "and a low air whoosh, metal joints under load. No impact at the end. No music.",
+             3),
+
+            ("CableOpen",
+             "A steel cable spool releasing. A short mechanical clack followed by wire unspooling " +
+             "quickly, metallic and taut. Industrial. No music.",
+             2),
+
+            ("CableMiss",
+             "A steel cable loop closing on empty ground. A dull slack snap, a brief scrape of wire " +
+             "on dirt, no tension. Disappointing and short. No music.",
+             2),
+
+            ("Capture",
+             "A steel net cinching tight around a pile of concrete rubble. A sharp wire tightening snap " +
+             "followed by rubble shifting and settling against the mesh. Satisfying. No music.",
+             3),
+
+            ("Snag",
+             "Heavy rubble being dragged catches hard on a concrete edge. A jarring scrape of stone on " +
+             "stone with a metallic cable strain. Short and rough. No music.",
+             2),
+
+            ("Drop",
+             "A load of concrete rubble released from a net onto bare ground. A dull collective thud and " +
+             "stones tumbling apart. Short. No music.",
+             2),
+
+            ("Swallow",
+             "A single chunk of concrete falling into a deep pit. A short tumble on the rim, then a " +
+             "distant hollow thud from below. Dry, no reverb tail. No music.",
+             3),
+
+            ("HoleLevelUp",
+             "A pit in the ground widening. A deep earthy rumble of soil and concrete giving way, " +
+             "rising into a short bright tonal swell that feels like a reward. No voice.",
+             2),
+
+            ("QuotaDone",
+             "A short triumphant industrial fanfare. Heavy machinery stamping a completion, a bright " +
+             "metallic chime over a low mechanical thump. Celebratory but brief. No voice.",
+             2),
         };
 
         static readonly List<(string name, Task task)> pending = new List<(string, Task)>();
@@ -73,6 +120,15 @@ namespace Demo.EditorTools
 
             foreach (var item in Wanted)
             {
+                // <b>이미 있는 것은 다시 안 만든다</b> [2026-10-08]. 생성은 크레딧을 쓴다 —
+                // 아홉 개를 더 받으려고 눌렀는데 이미 만든 셋까지 같이 태우면 안 된다.
+                // 다시 만들고 싶으면 그 파일을 지우고 누르면 된다.
+                if (File.Exists(Path.Combine(OutputFolder, $"SFX_{item.name}_01.wav")))
+                {
+                    Debug.Log($"[VarcoSfx] '{item.name}'은 이미 있다 — 건너뛴다.");
+                    continue;
+                }
+
                 try
                 {
                     var t = generate.Invoke(null, new object[] { item.prompt, item.count }) as Task;

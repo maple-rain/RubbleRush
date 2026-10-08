@@ -32,6 +32,8 @@ namespace Demo.Collection
         {
             if (!snag.Triggered || snagged.Count == 0) return;
 
+            Utils.GameAudio.Play(Data.Sfx.Snag, transform.position);
+
             if (snag.Mode == Hazard.DebrisSnag.Response.Snap)
             {
                 // 줄이 끊어진다 — 걸린 조각만이 아니라 전부 놓친다

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Demo.Utils
 {
@@ -63,12 +63,16 @@ namespace Demo.Utils
         /// 한 발 울린다. <paramref name="clip"/>이 비어 있으면 조용히 넘어간다 —
         /// 기획자가 아직 음원을 안 꽂았을 때 로그가 도배되지 않도록.
         /// </summary>
-        public void Play(AudioClip clip, Vector3 at, float volume = 1f, float pitch = 1f)
+        /// <param name="flat">거리와 무관하게 같은 크기로 낸다(2D). 단계 상승처럼
+        /// '화면 전체의 사건'에 쓴다 — 3D로 두면 플레이어가 구멍에서 멀 때 안 들린다</param>
+        public void Play(AudioClip clip, Vector3 at, float volume = 1f, float pitch = 1f,
+                         bool flat = false)
         {
             if (clip == null || voices == null) return;
 
             AudioSource src = Take();
             src.transform.position = at;
+            src.spatialBlend = flat ? 0f : 1f;
             src.clip = clip;
             src.volume = Mathf.Clamp01(volume);
             src.pitch = Mathf.Max(0.01f, pitch);
@@ -76,10 +80,11 @@ namespace Demo.Utils
         }
 
         /// <summary>여러 개 중 하나를 무작위로. 같은 소리가 반복되면 기계처럼 들린다.</summary>
-        public void PlayAny(AudioClip[] clips, Vector3 at, float volume = 1f, float pitch = 1f)
+        public void PlayAny(AudioClip[] clips, Vector3 at, float volume = 1f, float pitch = 1f,
+                            bool flat = false)
         {
             if (clips == null || clips.Length == 0) return;
-            Play(clips[Random.Range(0, clips.Length)], at, volume, pitch);
+            Play(clips[Random.Range(0, clips.Length)], at, volume, pitch, flat);
         }
 
         /// <summary>

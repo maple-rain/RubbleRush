@@ -1,0 +1,102 @@
+using UnityEngine;
+
+namespace Demo.Data
+{
+    /// <summary>
+    /// 게임이 내는 소리의 목록 [2026-10-08]. 이름 하나에 음원 여러 개를 매단다.
+    ///
+    /// <b>왜 코드가 AudioClip을 직접 들지 않는가.</b> 음원을 컴포넌트에 물리면 기획자가
+    /// 소리를 바꿀 때마다 프리팹을 열어야 하고, 어떤 소리가 어디서 나는지 한눈에 못 본다.
+    /// 수치를 <c>GameConfig</c>로 뺀 것과 같은 이유다 (CLAUDE.md 규칙 7) —
+    /// <b>이 에셋 하나만 보면 게임이 내는 소리가 전부 보인다.</b>
+    ///
+    /// <b>한 이름에 여러 음원을 두는 이유</b>: 같은 소리가 반복되면 기계처럼 들린다.
+    /// 초당 다섯 번 두드리는 게임이라 특히 그렇다. 재생할 때 하나를 무작위로 고르고,
+    /// 음높이도 조금 흔든다.
+    /// </summary>
+    [CreateAssetMenu(fileName = "SoundBank", menuName = "Demo/Sound Bank")]
+    public sealed class SoundBank : ScriptableObject
+    {
+        [System.Serializable]
+        public sealed class Entry
+        {
+            [Tooltip("어느 순간의 소리인가")]
+            public Sfx id;
+
+            [Tooltip("이 중 하나를 무작위로 고른다. 비어 있으면 조용히 넘어간다")]
+            public AudioClip[] clips;
+
+            [Range(0f, 2f), Tooltip("음량 배율")]
+            public float volume = 1f;
+
+            [Range(0f, 0.4f), Tooltip("음높이를 위아래로 흔드는 폭. 0이면 매번 똑같이 들린다")]
+            public float pitchJitter = 0.08f;
+
+            [Tooltip("같은 소리를 다시 내기까지의 최소 간격(초). " +
+                     "0이면 안 막는다. 한 프레임에 여러 개가 겹쳐 울리는 것을 막는 값이다")]
+            public float minGap;
+
+            [Tooltip("켜면 거리와 무관하게 같은 크기로 들린다(2D). " +
+                     "단계 상승이나 할당량 달성처럼 '화면 전체의 사건'에 쓴다")]
+            public bool flat;
+
+            /// <summary>마지막으로 울린 시각. 런타임 전용이라 직렬화하지 않는다.</summary>
+            [System.NonSerialized] public float LastAt = float.NegativeInfinity;
+        }
+
+        [SerializeField, Tooltip("소리 목록. Demo/16으로 파일 이름에서 자동으로 채울 수 있다")]
+        Entry[] entries = new Entry[0];
+
+        public Entry[] Entries => entries;
+
+        /// <summary>
+        /// 이름으로 찾는다. 없으면 null — 부르는 쪽이 조용히 넘어가면 된다.
+        /// 목록이 짧아(열댓 개) 선형 탐색이 사전보다 싸고 할당도 없다.
+        /// </summary>
+        public Entry Find(Sfx id)
+        {
+            for (int i = 0; i < entries.Length; i++)
+                if (entries[i] != null && entries[i].id == id) return entries[i];
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 소리가 날 <b>순간</b>들. 음원 파일 이름이 아니라 <b>게임의 사건</b>으로 적는다 —
+    /// 음원이 바뀌어도 코드는 그대로다.
+    /// </summary>
+    public enum Sfx
+    {
+        None = 0,
+
+        // ── 파괴 ──────────────────────────────────────────
+        /// <summary>팔을 휘두르는 순간. 맞기 전이다</summary>
+        Punch = 1,
+        /// <summary>벽에 맞는 순간. 초당 다섯 번 난다 — 제일 자주 들리는 소리다</summary>
+        Strike = 2,
+        /// <summary>한 층이 통째로 쏟아진다</summary>
+        FloorCollapse = 3,
+        /// <summary>건물이 완전히 부서진다</summary>
+        Broken = 4,
+
+        // ── 수집 ──────────────────────────────────────────
+        /// <summary>케이블을 펴기 시작한다</summary>
+        CableOpen = 10,
+        /// <summary>고리가 닫혔는데 아무것도 못 잡았다</summary>
+        CableMiss = 11,
+        /// <summary>고리가 닫히며 잔해를 잡았다</summary>
+        Capture = 12,
+        /// <summary>끌던 짐이 건물·토대에 걸렸다 [14번]</summary>
+        Snag = 13,
+        /// <summary>짐을 내려놓는다</summary>
+        Drop = 14,
+
+        // ── 구멍 ──────────────────────────────────────────
+        /// <summary>잔해 하나가 구멍에 빨려 들어간다</summary>
+        Swallow = 20,
+        /// <summary>구멍이 한 단계 커진다</summary>
+        HoleLevelUp = 21,
+        /// <summary>할당량을 채웠다</summary>
+        QuotaDone = 22,
+    }
+}
