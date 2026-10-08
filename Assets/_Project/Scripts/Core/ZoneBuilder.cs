@@ -1,4 +1,4 @@
-using Demo.Collection;
+﻿using Demo.Collection;
 using Demo.Data;
 using Demo.Destruction;
 using UnityEngine;
@@ -109,6 +109,7 @@ namespace Demo.Core
             Destructible.ClearRegistry();
             Debris.ClearRegistry();
             Hazard.ObstacleField.Clear();
+            Destruction.StageSkin.Clear();   // 단계별 머티리얼도 같이 거둔다
             StructureCount = 0;
         }
     }

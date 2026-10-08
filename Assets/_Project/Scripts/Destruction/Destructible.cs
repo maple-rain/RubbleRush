@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Demo.Core;
 using Demo.Data;
 using UnityEngine;
@@ -148,6 +148,37 @@ namespace Demo.Destruction
 
         float rubbleSince = -1f;
 
+        Renderer skin;
+        Material skinBase;
+
+        /// <summary>
+        /// 지금 단계의 그림을 상자에 입힌다 [2026-10-08].
+        ///
+        /// <b>단계용 그림이 없으면 아무것도 안 한다.</b> 다섯 종류 중 뽑힌 것부터 차례로
+        /// 켜지게 두는 편이 낫다 — 전부 모일 때까지 기다리면 아무것도 안 보인다
+        /// (<see cref="WallMaterials.Facade"/>와 같은 태도다).
+        ///
+        /// 세 단계용 오브젝트(intact/damaged/rubble)가 따로 물려 있으면 그쪽이 이긴다.
+        /// 여기는 상자 하나로 버티는 지금 구성을 위한 것이다.
+        /// </summary>
+        void ApplySkin(State next)
+        {
+            if (Data == null) return;
+
+            Texture2D tex = Data.FacadeForState(next);
+            if (tex == null) return;
+
+            if (skin == null)
+            {
+                skin = GetComponentInChildren<Renderer>();      // 규칙 5 — 한 번만 찾아 캐시한다
+                if (skin == null) return;
+                skinBase = skin.sharedMaterial;
+            }
+
+            Material mat = StageSkin.For(tex, skinBase);
+            if (mat != null && skin.sharedMaterial != mat) skin.sharedMaterial = mat;
+        }
+
         void SetState(State next)
         {
             Current = next;
@@ -155,6 +186,8 @@ namespace Demo.Destruction
             if (intact != null) intact.SetActive(next == State.Intact);
             if (damaged != null) damaged.SetActive(next == State.Damaged);
             if (rubble != null) rubble.SetActive(next == State.Rubble);
+
+            ApplySkin(next);
 
             if (next == State.Rubble && rubbleSince < 0f)
             {

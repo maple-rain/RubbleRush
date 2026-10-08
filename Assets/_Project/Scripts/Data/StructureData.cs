@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using UnityEngine;
 
 namespace Demo.Data
@@ -33,6 +33,31 @@ namespace Demo.Data
         [Tooltip("우측면. 입구 없음")] public Texture2D facadeRight;
         [Tooltip("후면. 입구 없음")]   public Texture2D facadeBack;
         [Tooltip("좌측면. 입구 없음")] public Texture2D facadeLeft;
+
+        [Header("파괴 단계별 정면 — 필드의 상자에 입힌다 [2026-10-08]")]
+        [Tooltip("파손. 금이 가고 벽돌이 떨어진 같은 건물.\n" +
+                 "비면 온전한 것을 그대로 쓴다 — 단계가 안 보일 뿐 깨지지 않는다")]
+        public Texture2D facadeDamaged;
+
+        [Tooltip("잔해. 1층 그루터기만 남은 같은 건물.\n" +
+                 "상자도 RubbleShrink로 납작해지므로 그림의 아랫부분만 보인다")]
+        public Texture2D facadeRubble;
+
+        /// <summary>
+        /// 그 <b>단계</b>의 정면 그림 [2026-10-08]. 없으면 한 단계 앞의 것으로 물러선다.
+        ///
+        /// <b>파괴 화면과는 다른 축이다.</b> 거기서는 벽이 보로노이로 조각나 떨어지므로
+        /// 그림을 갈아 끼울 자리가 없다 — 단계는 <b>필드에 서 있는 상자</b>가 보여 준다.
+        /// </summary>
+        public Texture2D FacadeForState(Destruction.Destructible.State state)
+        {
+            switch (state)
+            {
+                case Destruction.Destructible.State.Damaged: return facadeDamaged != null ? facadeDamaged : facadeFront;
+                case Destruction.Destructible.State.Rubble:  return facadeRubble != null ? facadeRubble : facadeDamaged != null ? facadeDamaged : facadeFront;
+                default: return facadeFront;
+            }
+        }
 
         /// <summary>
         /// 그 면의 그림. 없으면 null — 부르는 쪽이 건물 머티리얼로 물러선다.
