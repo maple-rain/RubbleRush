@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Demo.Collection
 {
@@ -22,7 +22,7 @@ namespace Demo.Collection
     /// 에서 쓰는 것과 같은 꼴이고, 인스펙터에 접히는 묶음 하나로 나온다.
     /// </summary>
     [System.Serializable]
-    public sealed class CableRope
+    public sealed partial class CableRope
     {
         [SerializeField, Range(4, 64), Tooltip("그물 테두리를 이루는 점의 수. " +
                  "비용은 여기에만 비례한다 — 잔해가 몇 개든 상관없다")]
@@ -44,6 +44,19 @@ namespace Demo.Collection
                  "클수록 그물이 짐에 착 붙고, 작으면 느슨하게 끌려온다")]
         float hugStrength = 18f;
 
+        [SerializeField, Tooltip("한 프레임에 테두리 <b>모양</b>이 바뀔 수 있는 최대 거리(m).\n" +
+                 "그물이 통째로 끌려가는 몫은 안 센다 — 그건 떨림이 아니다.\n" +
+                 "플레이어는 0.10m/프레임 간다. 0이면 안 묶는다(2026-10-08 이전 동작)")]
+        float shapeStep = 0.06f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("잔해가 테두리를 밀 때 줄이 얼마나 <b>예민하게</b> " +
+                 "반응하는가 [2026-10-08].\n" +
+                 "0이면 밀린 만큼 모양만 바뀌고 관성이 안 남는다 — 줄이 차분해진다.\n" +
+                 "1이면 밀린 거리가 그대로 줄의 속도가 되어 떤다. 한 프레임에 잔해 서른 개가 " +
+                 "두 번씩 미는 것이 전부 속도로 쌓인다.\n" +
+                 "모양이 안 바뀌는 것과는 다르다 — 모양은 그대로 바뀌고, 그 뒤에 출렁일 뿐이다")]
+        float pushResponse = 0.2f;
+
         [SerializeField, Tooltip("테두리를 <b>자유 사슬</b>로 둔다 [2026-10-08].\n" +
                  "끄면(기본) 위의 조이는 힘이 모든 점을 같은 반지름으로 밀어 — 즉 " +
                  "<b>항상 원</b>이 된다. 켜면 그 힘을 빼고 둘레 길이만 고정해서, " +
@@ -59,7 +72,7 @@ namespace Demo.Collection
                  "1에 가까우면 그 점이 손에 붙어 고리가 창처럼 찌그러진다 [고침 2026-10-01]")]
         float pullToHand = 0.25f;
 
-        Vector3[] p, prev;
+        Vector3[] p, prev, frameStart;
         float restLength;
         bool ready;
 
@@ -69,6 +82,12 @@ namespace Demo.Collection
 
         /// <summary>실측용·기획 비교용. 조이는 힘을 빼고 둘레만 고정할 것인가.</summary>
         public bool FreeChain { get => freeChain; set => freeChain = value; }
+
+        /// <summary>실측용. 잔해가 미는 것에 줄이 얼마나 예민한가.</summary>
+        public float PushResponse { get => pushResponse; set => pushResponse = Mathf.Clamp01(value); }
+
+        /// <summary>실측용. 한 프레임에 모양이 바뀔 수 있는 최대 거리(m).</summary>
+        public float ShapeStep { get => shapeStep; set => shapeStep = Mathf.Max(0f, value); }
 
         /// <summary>테두리 점 수. 렌더러가 선분 수를 맞출 때 읽는다.</summary>
         public int RingPoints => Mathf.Max(4, ringPoints);
@@ -80,7 +99,8 @@ namespace Demo.Collection
         public void Reset(Vector3 center, float radius)
         {
             int n = RingPoints;
-            if (p == null || p.Length != n) { p = new Vector3[n]; prev = new Vector3[n]; }
+            if (p == null || p.Length != n)
+            { p = new Vector3[n]; prev = new Vector3[n]; frameStart = new Vector3[n]; }
 
             for (int i = 0; i < n; i++)
             {
@@ -104,6 +124,7 @@ namespace Demo.Collection
         {
             if (!ready || dt <= 0f) return;
             int n = p.Length;
+            for (int i = 0; i < n; i++) frameStart[i] = p[i];
 
             // ① 적분 — 속도는 (지금 − 직전)에 들어 있다
             float keep = 1f - damping;
@@ -202,73 +223,6 @@ namespace Demo.Collection
                 if (s < bd) { bd = s; best = i; }
             }
             return best;
-        }
-
-        /// <summary>
-        /// 길이·바닥 구속을 다시 맞춘다. 밖에서 <see cref="Push"/>로 테두리를 밀었으면
-        /// 이웃 간 길이가 어긋나 있으므로 <b>민 쪽이 직접 불러야 한다</b>.
-        /// 베를레의 성질이다 — 위치를 억지로 옮겨도 반복만 돌리면 속도까지 맞아 들어간다.
-        /// </summary>
-        public void Relax()
-        {
-            if (!ready) return;
-            int n = p.Length;
-            for (int k = 0; k < iterations; k++)
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    int j = (i + 1) % n;
-                    Vector3 d = p[j] - p[i];
-                    float len = d.magnitude;
-                    if (len < 1e-5f) continue;
-                    Vector3 fix = d * ((len - restLength) / len * 0.5f);
-                    p[i] += fix; p[j] -= fix;
-                }
-                for (int i = 0; i < n; i++) if (p[i].y < floorY) p[i].y = floorY;
-            }
-        }
-
-        /// <summary>
-        /// 테두리 점 하나를 민다 — <see cref="NetPocket"/>의 반작용 입구다.
-        /// 이게 없으면 그물은 쇠틀이고, 잔해가 아무리 밀어도 모양이 안 바뀐다.
-        /// </summary>
-        public void Push(int i, Vector3 delta)
-        {
-            if (!ready || i < 0 || i >= p.Length) return;
-            delta.y = 0f;
-            p[i] += delta;
-        }
-
-        /// <summary>테두리의 무게중심. 안팎을 가를 때 쓴다 — 볼록하지 않아도 대체로 맞는다.</summary>
-        public Vector3 Centroid
-        {
-            get
-            {
-                if (!ready) return Vector3.zero;
-                Vector3 s = Vector3.zero;
-                for (int i = 0; i < p.Length; i++) s += p[i];
-                return s / p.Length;
-            }
-        }
-
-        /// <summary>지금 둘레 길이(m). 자유 사슬이면 처음 둘러싼 고리의 길이 그대로다.</summary>
-        public float Perimeter => ready ? restLength * p.Length : 0f;
-
-        /// <summary>
-        /// 손에서 뻗어 나가 테두리를 한 바퀴 도는 한 줄로 그린다.
-        ///
-        /// 선 하나로 그리는 이유는 LineRenderer가 끊어진 구간을 못 그리기 때문이다 —
-        /// 손과 고리를 따로 그리려면 렌더러가 둘 필요하고, 그건 드로우콜 하나를 더 쓴다
-        /// (예산 100 중 잔해 0개인 씬이 이미 82~84를 쓴다).
-        /// 손에서 <see cref="Near"/>로 들어가 고리를 돌아 제자리로 돌아온다.
-        /// </summary>
-        public void Draw(LineRenderer line)
-        {
-            if (!ready || line == null) { if (line != null) line.positionCount = 0; return; }
-            int n = p.Length;
-            if (line.positionCount != n + 2) line.positionCount = n + 2;
-            line.SetPosition(0, Hand);
-            for (int i = 0; i <= n; i++) line.SetPosition(i + 1, p[(Near + i) % n]);
         }
 
         public void Clear() { ready = false; }

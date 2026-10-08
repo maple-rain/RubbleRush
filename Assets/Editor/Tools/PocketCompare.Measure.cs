@@ -95,6 +95,7 @@ namespace Demo.EditorTools
             // 그걸 쓰면 Slots 쪽에는 댈 자가 없어 "주머니만 튕긴다"가 공짜로 나온다.
             // 두 모형 다 트랜스폼이 프레임 사이에 얼마나 움직였는가로 잰다 — 같은 자다.
             Speeds(towed, s);
+            Ring(tow, s);
             s.MoveInertia = tow.Pocket.MoveInertia;
             s.MoveContain = tow.Pocket.MoveContain;
             s.MoveSeparate = tow.Pocket.MoveSeparate;
@@ -136,8 +137,60 @@ namespace Demo.EditorTools
             s.MaxSpeed = max;
         }
 
+        /// <summary>
+        /// 줄의 <b>떨림</b>을 잰다 [기획자 지적 2026-10-08].
+        ///
+        /// 떨림은 "많이 움직인다"가 아니라 <b>"방향이 자꾸 뒤집힌다"</b>다. 그물이 타원으로
+        /// 늘어나는 것도 큰 움직임이지만 그건 한 방향으로 매끄럽게 간다. 그래서 자는
+        /// <b>프레임 사이 이동 방향의 반전율</b>이다 — 매끄러운 변형은 낮고 떠는 것은 높다.
+        ///
+        /// 테두리 전체가 같이 가는 몫(=그물이 끌려가는 것)은 빼고 본다. 남는 것이 모양의 변화다.
+        /// </summary>
+        static readonly List<Vector3> s_ring = new List<Vector3>(32);
+        static readonly List<Vector3> s_ringMove = new List<Vector3>(32);
+
+        static void Ring(CargoTow tow, Sample s)
+        {
+            if (!tow.Net.Ready) { s_ring.Clear(); s_ringMove.Clear(); return; }
+            int n = tow.Net.Count;
+            if (s_ring.Count != n)
+            {
+                s_ring.Clear(); s_ringMove.Clear();
+                for (int i = 0; i < n; i++) { s_ring.Add(tow.Net.At(i)); s_ringMove.Add(Vector3.zero); }
+                return;
+            }
+
+            // 테두리가 통째로 간 몫을 먼저 뺀다 — 그건 끌려가는 것이지 떠는 것이 아니다
+            Vector3 drift = Vector3.zero;
+            for (int i = 0; i < n; i++) { Vector3 d = tow.Net.At(i) - s_ring[i]; d.y = 0f; drift += d; }
+            drift /= n;
+
+            float sum = 0f;
+            int flips = 0, moved = 0;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 now = tow.Net.At(i);
+                Vector3 mv = now - s_ring[i]; mv.y = 0f;
+                mv -= drift;                                   // 모양이 변한 몫만 남긴다
+                sum += mv.magnitude;
+
+                if (mv.sqrMagnitude > 1e-6f && s_ringMove[i].sqrMagnitude > 1e-6f)
+                {
+                    moved++;
+                    if (Vector3.Dot(mv.normalized, s_ringMove[i].normalized) < 0f) flips++;
+                }
+                s_ringMove[i] = mv;
+                s_ring[i] = now;
+            }
+            s.RingStep = n > 0 ? sum / n * 60f : 0f;           // m/s
+            s.RingTremble = moved > 0 ? flips / (float)moved : 0f;
+        }
+
         /// <summary>새 경우를 시작할 때 부른다 — 앞 경우의 위치가 남으면 첫 속도가 터진다.</summary>
-        internal static void ResetSpeeds() => s_was.Clear();
+        internal static void ResetSpeeds()
+        {
+            s_was.Clear(); s_ring.Clear(); s_ringMove.Clear();
+        }
 
         /// <summary>
         /// Slots 모형에도 같은 자를 댄다. 안 그러면 "새어 나감 0·겹침 0"이 구속의 성과처럼 보이는데,

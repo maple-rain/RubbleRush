@@ -159,6 +159,7 @@ namespace Demo.Collection
             }
 
             pocket.Solve(dt, net);
+            net.Settle();        // 잔해가 밀어 놓은 모양 변화를 한 프레임 분량으로 묶는다
 
             for (int i = 0; i < n; i++)
             {

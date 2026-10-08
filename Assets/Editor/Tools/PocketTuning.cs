@@ -34,7 +34,7 @@ namespace Demo.EditorTools
             var csv = new StringBuilder();
             csv.AppendLine("# 주머니 솔버 값 쓸기 — t5_solid 잔해 32개 반경 1.17m, 같은 경로 [2026-10-08]");
             csv.AppendLine("# iters는 수렴(겹침·샘이 0으로 가는가), give/drag는 기획 값(모양)");
-            csv.AppendLine("type,iters,ropeGive,groundDrag,bounce,net_aspect,rear_share,nearHand_m,overlaps,mean_speed,max_speed,move_inertia,move_contain,move_separate,ms_per_frame");
+            csv.AppendLine("type,iters,ropeGive,groundDrag,bounce,net_aspect,rear_share,nearHand_m,overlaps,mean_speed,max_speed,ring_step,ring_tremble,move_contain,ms_per_frame");
 
             sb.AppendLine("<b>'구속요구'는 상한에 걸리기 전에 솔버가 요구한 이동량이다</b> — " +
                           "실제 이동이 아니다. 상한을 조이면 이 값은 커지는 게 정상이다.");
@@ -49,6 +49,26 @@ namespace Demo.EditorTools
             Bounce(sb, csv);
 
             sb.AppendLine();
+            sb.AppendLine("[0a] 줄 모양 상한 — 한 프레임에 테두리 모양이 바뀔 수 있는 거리 [기획자 지적 2026-10-08]");
+            sb.AppendLine("     0이 그 지적을 받은 동작이다(안 묶음). 줄떨림은 테두리 점이 매 프레임 방향을");
+            sb.AppendLine("     뒤집는 비율이고, 줄변형은 모양이 바뀌는 속도(m/s)다. 슬롯은 둘 다 0.00이다.");
+            foreach (var cs in PocketCompare.Cases)
+            {
+                if (cs.name != "t3_normal" && cs.name != "t4_heavy") continue;
+                sb.AppendLine();
+                sb.AppendLine($"  -- {cs.name} --");
+                sb.AppendLine(Head());
+                foreach (float r in new[] { 0f, 0.03f, 0.06f, 0.12f, 0.25f })
+                {
+                    PocketCompare.Override = (2, 0.35f, 0.12f, Keep, Step, Resp, r);
+                    PocketCompare.Drive(CargoTow.HaulShape.Pocket, cs,
+                                        out List<PocketCompare.Sample> log, out double ms);
+                    PocketCompare.Override = null;
+                    Fold(sb, csv, cs.name + " shape" + F(r), 2, 0.35f, 0.12f, Keep, log, ms);
+                }
+            }
+
+            sb.AppendLine();
             sb.AppendLine("[0b] 한 프레임 이동 상한 — 총량을 묶는다. 플레이어는 0.10m/프레임 간다");
             sb.AppendLine("     단계별로 손질해도 속도가 통만 바꿔 담기므로 합계를 묶는 쪽을 본다");
             foreach (var cs in PocketCompare.Cases)
@@ -59,7 +79,7 @@ namespace Demo.EditorTools
                 sb.AppendLine(Head());
                 foreach (float st in new[] { 0.08f, 0.12f, 0.20f, 0.35f, 0.60f })
                 {
-                    PocketCompare.Override = (2, 0.35f, 0.12f, Keep, st);
+                    PocketCompare.Override = (2, 0.35f, 0.12f, Keep, st, Resp, Shape);
                     PocketCompare.Drive(CargoTow.HaulShape.Pocket, cs,
                                         out List<PocketCompare.Sample> log, out double ms);
                     PocketCompare.Override = null;
@@ -104,7 +124,7 @@ namespace Demo.EditorTools
                 sb.AppendLine(Head());
                 foreach (float b in new[] { 0f, 0.15f, 0.35f, 0.6f, 1f })
                 {
-                    PocketCompare.Override = (2, 0.35f, 0.12f, b, Step);
+                    PocketCompare.Override = (2, 0.35f, 0.12f, b, Step, Resp, Shape);
                     PocketCompare.Drive(CargoTow.HaulShape.Pocket, cs,
                                         out List<PocketCompare.Sample> log, out double ms);
                     PocketCompare.Override = null;
@@ -115,12 +135,12 @@ namespace Demo.EditorTools
         }
 
         /// <summary>다른 쓸기에서 고정해 두는 기본값.</summary>
-        const float Keep = 0.15f, Step = 0.6f;
+        const float Keep = 0.15f, Step = 0.12f, Resp = 0.2f, Shape = 0.06f;
 
         static void One(StringBuilder sb, StringBuilder csv, int iters, float give, float drag,
                         float bounce, float step)
         {
-            PocketCompare.Override = (iters, give, drag, bounce, step);
+            PocketCompare.Override = (iters, give, drag, bounce, step, Resp, Shape);
             PocketCompare.Drive(CargoTow.HaulShape.Pocket, Case,
                                 out List<PocketCompare.Sample> log, out double ms);
             PocketCompare.Override = null;
@@ -142,7 +162,7 @@ namespace Demo.EditorTools
                 bias += s.RearShare; near += s.NearHand;
                 esc += s.Escaped; ovl += s.Overlaps; con += s.Contacts;
                 mean += s.MeanSpeed; top += s.MaxSpeed;
-                mi += s.MoveInertia; mc += s.MoveContain; ms2 += s.MoveSeparate;
+                mi += s.RingStep; mc += s.RingTremble; ms2 += s.MoveContain;
                 c++;
             }
             if (c == 0) return;
@@ -160,7 +180,7 @@ namespace Demo.EditorTools
         }
 
         static string Head() => string.Format("  {0,-5}{1,-7}{2,-7}{3,-7}{4,9}{5,8}{6,9}{7,10}{8,9}{9,9}",
-            "반복", "무름", "마찰", "튕김", "그물비율", "뒤쪽", "겹침", "평균속m/s", "최고속", "구속요구 관성/테두리/분리 m");
+            "반복", "무름", "마찰", "튕김", "그물비율", "뒤쪽", "겹침", "평균속m/s", "최고속", "줄변형 / 줄떨림 / 테두리밀기");
 
         static string F(float v) => v.ToString("F2", CultureInfo.InvariantCulture);
     }
