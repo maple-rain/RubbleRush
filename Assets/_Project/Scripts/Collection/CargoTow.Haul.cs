@@ -116,6 +116,25 @@ namespace Demo.Collection
 
             snag.End(dt);
             ResolveSnag();
+            LoadBack = MeasureBack(here, back);
+        }
+
+        /// <summary>
+        /// 짐이 진행 반대 방향으로 얼마나 뻗어 있는가. 카메라가 이걸 담는다.
+        /// 옆으로 벌어진 폭은 안 본다 — 쿼터뷰에서 화면 밖으로 나가는 쪽은 <b>뒤</b>다 (실측).
+        /// </summary>
+        float MeasureBack(Vector3 here, Vector3 back)
+        {
+            float far = 0f;
+            for (int i = 0; i < towed.Count; i++)
+            {
+                Debris d = towed[i];
+                if (d == null) continue;
+                Vector3 o = d.transform.position - here; o.y = 0f;
+                float along = Vector3.Dot(o, back) + d.SizeRadius;
+                if (along > far) far = along;
+            }
+            return far;
         }
 
         /// <summary>

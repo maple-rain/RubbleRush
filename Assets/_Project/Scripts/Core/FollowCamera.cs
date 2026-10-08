@@ -110,15 +110,37 @@ namespace Demo.Core
             GameConfig cfg = GameConfigRef.Current;
             if (cfg == null) return;
 
-            float zoom = 0f;
+            float zoom = 0f, lookBack = 0f;
             if (cargo != null)
+            {
+                // ① 예전 식 — 무게가 늘면 조금 물러난다. 그대로 둔다
                 zoom = Mathf.Min(cargo.TotalUnits * cfg.cameraZoomPerUnit, cfg.cameraZoomMax);
+
+                // ② 짐을 담는 식 [2026-10-08]. <b>단위 수가 아니라 실제로 뻗은 길이로 몬다</b> —
+                // 짐 뒤끝 ÷ 단위가 종류별로 2.50~0.54라 단위 수로는 작은 종류가 통째로 밖이었다.
+                float back = cargo.LoadBack;
+                lookBack = Mathf.Min(back * cfg.cameraLookBackShare, cfg.cameraLookBackMax);
+                float fit = cfg.cameraFitPerMeter * (back - lookBack) - cfg.cameraDistance;
+                zoom = Mathf.Min(Mathf.Max(zoom, fit), cfg.cameraZoomMax);
+            }
 
             float distance = cfg.cameraDistance + zoom;
 
             // 필드 — 고정 각도 쿼터뷰
             Quaternion fieldRot = Quaternion.Euler(pitch, yaw, 0f);
-            Vector3 fieldPos = target.position - fieldRot * Vector3.forward * distance;
+
+            // <b>짐을 끌 때는 플레이어가 아니라 플레이어와 짐 사이를 본다</b> [2026-10-08].
+            //
+            // 쿼터뷰 각도가 고정이라 <b>뒤쪽 시야가 진행 방향에 따라 달라진다</b> — 카메라를
+            // 향해 달리면 짐이 화면 아래로 빠진다. 실측(최악 각도 36방향 중):
+            // 짐을 다 담는 데 필요한 카메라 거리는 <b>짐 뒤끝의 2.07배</b>로 거의 정확히 비례하고,
+            // 일반 건물 12조각이면 26.5m가 필요하다 — 지금 8m의 세 배라 전부 작아진다.
+            // 시선을 1m 뒤로 주면 거리 2.07m를 아낀다. 둘을 같이 쓰는 쪽이 싸다.
+            //
+            // 이 식이 없던 동안에도 짐은 이미 화면 밖이었다 — 해바라기 배열에서도
+            // 견고 32조각은 최악 각도에서 13%만 보였다. 주머니가 만든 결함이 아니다.
+            Vector3 focus = target.position - target.forward * lookBack;
+            Vector3 fieldPos = focus - fieldRot * Vector3.forward * distance;
 
             // 파괴 화면 — 1인칭 [확정 2026-09-22].
             // 타격 동작은 보이지 않는다. 벽이 화면을 채우고, 두드릴 때마다 그 벽이 무너져 갈 뿐이다.

@@ -40,6 +40,12 @@ namespace Demo.EditorTools
         /// 숫자만으로는 "타원"이 와닿지 않는다. 그림은 이 좌표로 그리지, 따로 지어내지 않는다.
         /// </summary>
         internal static StringBuilder Snapshot;
+
+        /// <summary>
+        /// 스냅 순간의 짐을 <b>플레이어 국소 좌표</b>로 남긴다 (옆, 뒤, 반경).
+        /// 카메라가 이걸 다 담는지는 <see cref="RearViewFit"/>가 묻는다 — 좌표를 또 지어내지 않으려고 돌려 쓴다.
+        /// </summary>
+        internal static readonly List<(float side, float back, float r)> LastLoad = new List<(float, float, float)>(64);
         const float SnapAt = 5.5f;   // 직진이 자리를 잡은 뒤, 회전 전
 
         const float Dt = 1f / 60f;
@@ -53,7 +59,7 @@ namespace Demo.EditorTools
         /// 정확히 절반이라 <b>Slots가 자동으로 겹침 0</b>이 된다 — 비교가 한쪽에 유리하게 기운다.
         /// 진짜 반경은 0.16~1.17로 네 배 넘게 벌어지고, 큰 쪽은 슬롯 간격보다 굵다.
         /// </summary>
-        static readonly (string name, int count, float radius, float scatter)[] Cases =
+        internal static readonly (string name, int count, float radius, float scatter)[] Cases =
         {
             ("t1_weak",   2, 0.16f, 1.2f),
             ("t2_light",  4, 0.32f, 1.8f),
@@ -124,6 +130,26 @@ namespace Demo.EditorTools
             int n = cs.count;
             log = new List<Sample>(700);
 
+            // <b>전역 설정을 실제 경로로 세운다</b> [고침 2026-10-08].
+            //
+            // GameConfigRef.Current는 Awake에서 채워지는 static이라 에디트 모드에서는 null이다.
+            // 그대로 두면 CargoTow가 케이블 길이 상한을 <b>조용히 건너뛴다</b> — 측정이 게임과
+            // 다른 코드를 재게 된다. 실제로 한 번 그렇게 재서 틀린 수를 받았다.
+            //
+            // 비활성으로 만들어 필드를 물린 뒤 SetActive로 깨우려 했지만 <b>안 된다</b> —
+            // 에디트 모드에서 Awake는 AddComponent 때만 돌고 활성화로는 안 돈다
+            // ([ExecuteAlways]가 아니다). 그래서 필드를 물린 뒤 Awake 본문을 직접 부른다.
+            // 베껴 쓴 것이 아니라 게임이 도는 그 메서드다.
+            var boot = new GameObject("~PocketConfig");
+            boot.SetActive(false);
+            var reference = boot.AddComponent<Core.GameConfigRef>();
+            var bso = new SerializedObject(reference);
+            bso.FindProperty("config").objectReferenceValue = FindConfig();
+            bso.ApplyModifiedPropertiesWithoutUndo();
+            typeof(Core.GameConfigRef)
+                .GetMethod("Awake", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(reference, null);
+
             var player = new GameObject("~PocketCompare");
             var tow = player.AddComponent<CargoTow>();
             Configure(tow, shape);
@@ -166,7 +192,7 @@ namespace Demo.EditorTools
                 frames++;
 
                 log.Add(Measure(tow, player.transform, t));
-                if (Snapshot != null && t <= SnapAt && t + Dt > SnapAt) Snap(tow, player.transform, shape, cs.name);
+                if (t <= SnapAt && t + Dt > SnapAt) Snap(tow, player.transform, shape, cs.name);
                 t += Dt;
             }
 
@@ -174,6 +200,12 @@ namespace Demo.EditorTools
 
             for (int i = 0; i < debris.Count; i++) Object.DestroyImmediate(debris[i].gameObject);
             Object.DestroyImmediate(player);
+            // OnDestroy도 같은 이유로 안 돌므로 static을 손으로 되돌린다 —
+            // 안 그러면 파괴된 객체의 설정이 다음 측정까지 살아남는다 (좀비 콜백과 같은 함정이다)
+            typeof(Core.GameConfigRef)
+                .GetMethod("OnDestroy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(reference, null);
+            Object.DestroyImmediate(boot);
         }
 
         /// <summary>그 순간의 좌표를 그대로 적는다. 플레이어 기준 국소 좌표라 그림에서 겹쳐 볼 수 있다.</summary>
@@ -185,16 +217,23 @@ namespace Demo.EditorTools
 
             void Put(string kind, Vector3 w, float r)
             {
+                if (Snapshot == null) return;
                 Vector3 d = w - o; d.y = 0f;
                 Snapshot.AppendLine(string.Join(",", shape, type, kind,
                     F(Vector3.Dot(d, side)), F(Vector3.Dot(d, dir)), F(r)));
             }
 
+            LastLoad.Clear();
             Put("hand", player.position, 0f);
             if (tow.Net.Ready)
                 for (int i = 0; i < tow.Net.Count; i++) Put("ring", tow.Net.At(i), 0f);
             for (int i = 0; i < tow.Towed.Count; i++)
-                Put("debris", tow.Towed[i].transform.position, tow.Towed[i].SizeRadius);
+            {
+                Vector3 w = tow.Towed[i].transform.position;
+                Put("debris", w, tow.Towed[i].SizeRadius);
+                Vector3 d = w - o; d.y = 0f;
+                LastLoad.Add((Vector3.Dot(d, side), Vector3.Dot(d, dir), tow.Towed[i].SizeRadius));
+            }
         }
 
         /// <summary>인스펙터 값에 기대지 않는다 — 두 모형이 같은 설정에서 출발해야 한다.</summary>
@@ -249,6 +288,13 @@ namespace Demo.EditorTools
                                            F(bias), F(maxR), F(near), F(esc), F(ovl), F(con),
                                            ms.ToString("F4", CultureInfo.InvariantCulture)));
             }
+        }
+
+        static Demo.Data.GameConfig FindConfig()
+        {
+            string[] g = AssetDatabase.FindAssets("t:GameConfig");
+            return g.Length > 0 ? AssetDatabase.LoadAssetAtPath<Demo.Data.GameConfig>(
+                AssetDatabase.GUIDToAssetPath(g[0])) : null;
         }
 
         static string F(float v) => v.ToString("F2", CultureInfo.InvariantCulture);

@@ -47,11 +47,11 @@ namespace Demo.Collection
                  "Off = 2026-10-01 이전 동작 · TensionOnly = ③ · RopeOnly = ① · Both = 둘 다")]
         PhysicsMode mode = PhysicsMode.Both;
 
-        [SerializeField, Tooltip("잔해의 자리를 누가 정하는가 [2026-10-08].\n" +
-                 "Slots = 해바라기 나선에 꽂는다(기존). 끌어도 원 모양 그대로다\n" +
-                 "Pocket = 그물 안에서 밀린다. 끌면 타원이 되고 끝쪽에 쌓인다\n" +
+        [SerializeField, Tooltip("잔해의 자리를 누가 정하는가.\n" +
+                 "Pocket = 그물 안에서 밀린다. 끌면 타원이 되고 끝쪽에 쌓인다 [확정 2026-10-08]\n" +
+                 "Slots = 해바라기 나선에 꽂는다(2026-10-08 이전). 끌어도 원 모양 그대로다\n" +
                  "Pocket은 줄(RopeOnly·Both)이 켜져 있어야 뜻이 있다 — 경계가 곧 그물이다")]
-        HaulShape shape = HaulShape.Slots;
+        HaulShape shape = HaulShape.Pocket;
 
         [SerializeField, Tooltip("뭉치가 플레이어 뒤로 떨어지는 거리(m). 장력을 켜면 줄 길이가 된다")]
         float trailDistance = 2.5f;
@@ -97,6 +97,17 @@ namespace Demo.Collection
 
         /// <summary>끌고 있는 총 단위. 이동 속도와 카메라 줌이 읽는다.</summary>
         public int TotalUnits { get; private set; }
+
+        /// <summary>
+        /// 짐의 <b>뒤끝</b>까지의 거리(m) — 플레이어에서 가장 먼 조각의 바깥면까지, 진행 반대 방향으로.
+        /// 카메라가 짐을 담을 때 읽는다 [2026-10-08].
+        ///
+        /// <b>왜 단위 수가 아닌가.</b> 카메라를 <see cref="TotalUnits"/>로 몰았더니 작은 종류에서
+        /// 짐이 통째로 화면 밖이었다. 짐 뒤끝 ÷ 단위가 2.50 → 0.54로 <b>전혀 비례하지 않기</b>
+        /// 때문이다 — 그물 크기는 조각 수가 아니라 흩어진 넓이와 줄 길이가 정한다.
+        /// 실제로 뻗은 만큼을 재서 주면 종류를 안 가린다.
+        /// </summary>
+        public float LoadBack { get; private set; }
 
         public IReadOnlyList<Debris> Towed => towed;
         public bool IsEmpty => towed.Count == 0;
@@ -207,6 +218,17 @@ namespace Demo.Collection
                 if (towed[i].SizeRadius > biggest) biggest = towed[i].SizeRadius;
             }
             radius = Mathf.Max(0.5f, far + biggest);
+
+            // <b>케이블보다 긴 고리는 그릴 수 없다</b> [고침 2026-10-08].
+            //
+            // 둘러싼 것이 넓게 흩어져 있으면 이 식이 케이블 길이를 넘는 반지름을 돌려준다 —
+            // 견고 건물(흩어짐 8.0m)이면 둘레 57.6m가 나오는데 케이블은 그보다 짧다.
+            // 자유 사슬은 둘레가 고정이라 그 수가 영구적인 그물 크기가 되고, 실측에서
+            // 짐이 플레이어 뒤 26.1m까지 늘어나 <b>어느 각도에서도 화면에 안 들어왔다</b>.
+            // 물리적으로도 틀렸다. 상한은 케이블이 정한다.
+            Data.GameConfig cfg = Core.GameConfigRef.Current;
+            if (cfg != null && cfg.cableMaxLength > 0f)
+                radius = Mathf.Min(radius, cfg.cableMaxLength / (2f * Mathf.PI));
             return mid;
         }
 
