@@ -84,6 +84,13 @@ namespace Demo.EditorTools
                 if (dmg != null) used.Add("파손");
                 if (rub != null) used.Add("잔해");
 
+                // 지붕 — 종류 전용(T_<id>_roof)이 있으면 그것, 없으면 공용 한 장을 돌려 쓴다.
+                // 같은 텍스처를 쓰면 머티리얼이 공유돼 묶여서 그려진다 (StageSkin).
+                byKey.TryGetValue("t_" + id + "_roof", out Texture2D roof);
+                if (roof == null) roof = Shared(SharedRoof);
+                so.FindProperty("facadeRoof").objectReferenceValue = roof;
+                if (roof != null) used.Add(roof.name.EndsWith("_roof") ? "지붕" : "지붕(공용)");
+
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(data);
                 bound++;
@@ -99,6 +106,15 @@ namespace Demo.EditorTools
         }
 
         static string Cap(string s) => char.ToUpperInvariant(s[0]) + s.Substring(1);
+
+        /// <summary>
+        /// 종류를 안 가리는 공용 지붕. 철거 현장에서는 어느 건물이든 옥상이 비슷하게 생겼고,
+        /// 한 장을 돌려 쓰면 머티리얼이 하나라 드로우콜이 안 는다.
+        /// 종류별로 달리 하고 싶으면 <c>T_&lt;id&gt;_roof.png</c>를 Facades에 넣으면 그쪽이 이긴다.
+        /// </summary>
+        const string SharedRoof = "Assets/_Project/Art/Textures/T_Roof_Flat.png";
+
+        static Texture2D Shared(string path) => AssetDatabase.LoadAssetAtPath<Texture2D>(path);
 
         /// <summary>
         /// 모바일 예산에 맞춰 임포트 설정을 박는다. 기본값으로 두면 한 장이 16MB다.

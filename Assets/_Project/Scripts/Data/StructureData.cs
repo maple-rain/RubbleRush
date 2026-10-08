@@ -43,6 +43,12 @@ namespace Demo.Data
                  "상자도 RubbleShrink로 납작해지므로 그림의 아랫부분만 보인다")]
         public Texture2D facadeRubble;
 
+        [Tooltip("지붕(윗면). 비면 지붕을 안 덮고 벽 그림이 윗면까지 간다.\n" +
+                 "카메라가 50도로 내려다보므로 윗면이 어느 벽보다 크게 보인다 — " +
+                 "정면도가 거기 붙으면 건물이 납작해 보인다 (RoofCap 참조).\n" +
+                 "여러 종류가 같은 것을 써도 된다. 같으면 머티리얼을 공유해 묶여서 그려진다")]
+        public Texture2D facadeRoof;
+
         /// <summary>
         /// 그 <b>단계</b>의 정면 그림 [2026-10-08]. 없으면 한 단계 앞의 것으로 물러선다.
         ///

@@ -47,9 +47,11 @@ namespace Demo.Destruction
             Data = data;
 
             // 메시 3종을 자식으로 달아두고 켜고 끈다. 매번 Instantiate하면 파괴 프레임에 GC가 튄다.
-            intact = SpawnMesh(data.meshIntact, "Intact");
-            damaged = SpawnMesh(data.meshDamaged, "Damaged");
-            rubble = SpawnMesh(data.meshRubble, "Rubble");
+            // 크기는 전부 colliderSize가 정한다 — 프리팹에 박힌 치수를 쓰면 때리는 판정과
+            // 보이는 상자가 조용히 어긋난다 (MeshFit 참조).
+            intact = SpawnMesh(data.meshIntact, "Intact", data.colliderSize);
+            damaged = SpawnMesh(data.meshDamaged, "Damaged", data.colliderSize);
+            rubble = SpawnMesh(data.meshRubble, "Rubble", RubbleSize(data));
 
             box = gameObject.AddComponent<BoxCollider>();
             s_byCollider[box] = this;
@@ -62,19 +64,48 @@ namespace Demo.Destruction
             if (box != null) s_byCollider.Remove(box);
         }
 
-        GameObject SpawnMesh(GameObject prefab, string label)
+        /// <summary>
+        /// 한 단계의 겉모습을 짓는다. <b>껍데기를 한 겹 둔다</b> —
+        /// <see cref="MeshFit"/>이 메시를 늘리느라 스케일을 건드리므로, 지붕처럼 나중에 덧붙이는
+        /// 것을 그 밑에 달면 같이 늘어난다. 껍데기는 스케일 1로 남아 기준자 노릇을 한다.
+        /// </summary>
+        GameObject SpawnMesh(GameObject prefab, string label, Vector3 size)
         {
             if (prefab == null) return null;
-            GameObject go = Instantiate(prefab, transform);
-            go.name = label;
+
+            var host = new GameObject(label);
+            host.transform.SetParent(transform, false);
+
+            GameObject go = Instantiate(prefab, host.transform);
 
             // 생성 메시에 붙어 오는 콜라이더는 버린다 — 논컨벡스 고폴리라 모바일에서 못 쓴다
             // (CLAUDE.md 규칙 4). 콜라이더는 StructureData.colliderSize가 유일한 출처다.
             foreach (var c in go.GetComponentsInChildren<Collider>(true)) Destroy(c);
 
-            go.SetActive(false);
-            return go;
+            MeshFit.Fit(go, size);
+
+            // 단계마다 제 렌더러를 기억해 둔다. 그림을 입힐 때 <b>보이는 쪽</b>에 입혀야 한다
+            // (규칙 5 — 찾는 일은 여기서 한 번만).
+            var r = go.GetComponentInChildren<Renderer>(true);
+            if (r != null)
+            {
+                if (label == "Damaged") { skinDamaged = r; baseDamaged = r.sharedMaterial; }
+                else if (label == "Rubble") { skinRubble = r; baseRubble = r.sharedMaterial; }
+                else { skinIntact = r; baseIntact = r.sharedMaterial; }
+
+                // 윗면은 50도 시야에서 어느 벽보다 크게 보인다. 거기에 벽 그림을 두면
+                // 건물이 바닥에 깔린 그림판처럼 보인다 (RoofCap).
+                if (label != "Rubble" && Data.facadeRoof != null)
+                    RoofCap.Make(host.transform, size, StageSkin.For(Data.facadeRoof, r.sharedMaterial));
+            }
+
+            host.SetActive(false);
+            return host;
         }
+
+        /// <summary>잔해 단계의 겉보기 치수. <see cref="ApplyCollider"/>가 상자에 쓰는 것과 같다.</summary>
+        static Vector3 RubbleSize(StructureData d) =>
+            new Vector3(d.colliderSize.x * RubbleShrinkX, RubbleHeight, d.colliderSize.z * RubbleShrinkZ);
 
         /// <summary>
         /// 홀드 진행. 이번 호출에서 잔해가 되면 true를 돌려준다 —
@@ -148,8 +179,9 @@ namespace Demo.Destruction
 
         float rubbleSince = -1f;
 
-        Renderer skin;
-        Material skinBase;
+        // 단계마다 하나씩. 하나로 묶어 캐시하면 켜져 있지 않은 메시에 그림을 입히게 된다.
+        Renderer skinIntact, skinDamaged, skinRubble;
+        Material baseIntact, baseDamaged, baseRubble;
 
         /// <summary>
         /// 지금 단계의 그림을 상자에 입힌다 [2026-10-08].
@@ -158,8 +190,11 @@ namespace Demo.Destruction
         /// 켜지게 두는 편이 낫다 — 전부 모일 때까지 기다리면 아무것도 안 보인다
         /// (<see cref="WallMaterials.Facade"/>와 같은 태도다).
         ///
-        /// 세 단계용 오브젝트(intact/damaged/rubble)가 따로 물려 있으면 그쪽이 이긴다.
-        /// 여기는 상자 하나로 버티는 지금 구성을 위한 것이다.
+        /// <b>그 단계의 메시에 입힌다</b> [고침 2026-10-08]. 전에는 렌더러를 처음 한 번만
+        /// 찾아 캐시했는데, 그때 켜져 있던 것은 늘 Intact였다. 그래서 파손·잔해 그림이
+        /// <b>꺼져 있는 Intact 메시</b>에 붙고, 화면에 보이는 메시는 민짜로 남았다 —
+        /// 실측에서 Damaged 상태의 보이는 메시가 <c>M_TEMP_Steel</c>이었다.
+        /// 종당 세 장씩 뽑아 둔 단계 그림이 온전 단계 말고는 한 번도 안 보이고 있었다.
         /// </summary>
         void ApplySkin(State next)
         {
@@ -168,15 +203,17 @@ namespace Demo.Destruction
             Texture2D tex = Data.FacadeForState(next);
             if (tex == null) return;
 
-            if (skin == null)
-            {
-                skin = GetComponentInChildren<Renderer>();      // 규칙 5 — 한 번만 찾아 캐시한다
-                if (skin == null) return;
-                skinBase = skin.sharedMaterial;
-            }
+            Renderer r = next == State.Damaged ? skinDamaged
+                       : next == State.Rubble ? skinRubble : skinIntact;
+            Material baseMat = next == State.Damaged ? baseDamaged
+                             : next == State.Rubble ? baseRubble : baseIntact;
 
-            Material mat = StageSkin.For(tex, skinBase);
-            if (mat != null && skin.sharedMaterial != mat) skin.sharedMaterial = mat;
+            // 그 단계의 메시가 없으면 온전 쪽으로 물러선다 — 아무것도 안 하는 것보다 낫다.
+            if (r == null) { r = skinIntact; baseMat = baseIntact; }
+            if (r == null) return;
+
+            Material mat = StageSkin.For(tex, baseMat);
+            if (mat != null && r.sharedMaterial != mat) r.sharedMaterial = mat;
         }
 
         void SetState(State next)
