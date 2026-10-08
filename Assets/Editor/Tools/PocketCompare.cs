@@ -91,6 +91,7 @@ namespace Demo.EditorTools
 
             Snapshot = new StringBuilder();
             sb.AppendLine("투망 주머니 비교 — 같은 경로를 두 모형으로 끈다 [2026-10-08]");
+            WarnIfSceneDiffers(sb);
             sb.AppendLine();
 
             foreach (var cs in Cases)
@@ -288,6 +289,46 @@ namespace Demo.EditorTools
                                            F(bias), F(maxR), F(near), F(esc), F(ovl), F(con),
                                            ms.ToString("F4", CultureInfo.InvariantCulture)));
             }
+        }
+
+        /// <summary>
+        /// <b>씬이 실제로 무엇을 쓰고 있는지 먼저 말한다</b> [2026-10-08].
+        ///
+        /// 이 도구는 CargoTow를 <b>새로 만들어서</b> 돌린다 — 그래야 두 모형을 같은 조건으로
+        /// 비교할 수 있다. 그런데 새로 만든 컴포넌트는 C# 기본값을 쓰고, <b>게임은 씬에 박힌 값을
+        /// 쓴다.</b> 둘이 갈라지면 여기서는 주머니가 멀쩡히 도는데 플레이하면 예전 그대로다.
+        ///
+        /// 실제로 그렇게 됐다: 필드를 Slots 기본값으로 추가한 뒤 씬이 저장되면서 0이 박혔고,
+        /// 나중에 코드 기본값만 Pocket으로 바꿨다. 직렬화된 값은 안 따라온다 —
+        /// 이 프로젝트에서 이미 한 번 데인 함정이다. 보고서 맨 위에서 먼저 알린다.
+        /// </summary>
+        static void WarnIfSceneDiffers(StringBuilder sb)
+        {
+            var live = Object.FindFirstObjectByType<CargoTow>(FindObjectsInactive.Include);
+            if (live == null)
+            {
+                sb.AppendLine("[주의] 씬에 CargoTow가 없다 — 이 표는 코드 기본값만 말한다.");
+                sb.AppendLine();
+                return;
+            }
+
+            var so = new SerializedObject(live);
+            var shape = (CargoTow.HaulShape)so.FindProperty("shape").enumValueIndex;
+            var mode = (CargoTow.PhysicsMode)so.FindProperty("mode").enumValueIndex;
+            sb.AppendLine($"씬({live.gameObject.name})이 지금 쓰는 값: shape={shape} · mode={mode}");
+
+            if (shape == CargoTow.HaulShape.Pocket &&
+                (mode == CargoTow.PhysicsMode.RopeOnly || mode == CargoTow.PhysicsMode.Both))
+            {
+                sb.AppendLine();
+                return;
+            }
+
+            sb.AppendLine(shape != CargoTow.HaulShape.Pocket
+                ? "[주의] 씬은 주머니가 아니다 — 아래 Pocket 줄은 게임에서 안 일어나는 일이다."
+                : "[주의] 주머니인데 줄이 꺼져 있다 — 경계가 곧 그물이라 Pocket은 RopeOnly/Both여야 돈다.");
+            sb.AppendLine("       인스펙터에서 [Player]의 CargoTow를 고친다. 코드 기본값은 씬을 안 바꾼다.");
+            sb.AppendLine();
         }
 
         static Demo.Data.GameConfig FindConfig()
