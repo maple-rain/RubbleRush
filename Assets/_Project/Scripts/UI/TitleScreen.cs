@@ -132,6 +132,27 @@ namespace Demo.UI
             page = Page.Playing;      // 같은 씬 안에서 시작한다 (시작 메뉴를 떼기 전의 방식)
         }
 
+        /// <summary>
+        /// 게임을 끝낸다 [지시 2026-10-12].
+        ///
+        /// <b>에디터에서는 Quit이 아무 일도 안 한다.</b> 그래서 눌러도 반응이 없으면
+        /// "버튼이 고장났나" 싶어진다 — 에디터에서는 플레이 모드를 끈다.
+        ///
+        /// 안드로이드에서는 뒤로 가기로 나가는 것이 보통이라 이 버튼이 없어도 되지만,
+        /// 있는 편이 "끝낼 수 있다"가 보인다.
+        /// </summary>
+        void Quit()
+        {
+            // 나가기 전에 음량을 저장한다. 옵션을 만지고 바로 끄는 것이 흔한 순서다.
+            if (vol != null) vol.Save();
+
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
         void Close()
         {
             page = Page.Title;
@@ -200,11 +221,12 @@ namespace Demo.UI
 
         void DrawTitle(float w, float h)
         {
-            GUI.Label(new Rect(0, h * 0.16f, w, h * 0.18f), title, big);
+            GUI.Label(new Rect(0, h * 0.13f, w, h * 0.16f), title, big);
 
-            float bw = w * 0.30f, bh = h * 0.13f, x = (w - bw) * 0.5f;
-            if (Button(new Rect(x, h * 0.44f, bw, bh), "시작", mid)) Begin();
-            if (Button(new Rect(x, h * 0.62f, bw, bh), "옵션", mid)) page = Page.Options;
+            float bw = w * 0.30f, bh = h * 0.115f, x = (w - bw) * 0.5f;
+            if (Button(new Rect(x, h * 0.38f, bw, bh), "시작", mid)) Begin();
+            if (Button(new Rect(x, h * 0.53f, bw, bh), "옵션", mid)) page = Page.Options;
+            if (Button(new Rect(x, h * 0.68f, bw, bh), "나가기", mid)) Quit();
 
             small.normal.textColor = new Color(1f, 1f, 1f, 0.45f);
             GUI.Label(new Rect(0, h * 0.86f, w, h * 0.06f),

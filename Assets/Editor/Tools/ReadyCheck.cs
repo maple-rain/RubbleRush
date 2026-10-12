@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using Demo.Data;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace Demo.EditorTools
@@ -46,7 +47,19 @@ namespace Demo.EditorTools
             return sb.ToString();
         }
 
-        /// <summary>씬에 있어야 할 컴포넌트. 하나라도 없으면 그 기능이 통째로 없는 것이다.</summary>
+        /// <summary>
+        /// 시작 씬에 있어야 할 것. <b>게임 쪽 컴포넌트는 여기 없는 것이 맞다</b> —
+        /// 메뉴 화면에 플레이어와 구역 생성기가 있으면 그게 이상한 것이다.
+        /// </summary>
+        static readonly (string type, string what, bool vital)[] NeededInStart =
+        {
+            ("Demo.UI.TitleScreen",       "시작 메뉴",   true),
+            ("Demo.Utils.VolumeSettings", "음량 설정",   true),
+            ("Demo.Utils.GameAudio",      "효과음",      false),
+            ("Demo.Utils.MusicPlayer",    "메뉴 음악",   false),
+        };
+
+        /// <summary>게임 씬에 있어야 할 컴포넌트. 하나라도 없으면 그 기능이 통째로 없는 것이다.</summary>
         static readonly (string type, string what, bool vital)[] Needed =
         {
             ("Demo.Core.GameConfigRef",      "설정값 출처",        true),
@@ -69,10 +82,25 @@ namespace Demo.EditorTools
             ("Demo.UI.ResultScreen",         "결과 화면",          false),
         };
 
+        /// <summary>
+        /// 열려 있는 씬에 맞는 목록으로 본다 [고침 2026-10-12].
+        ///
+        /// 전에는 목록이 하나뿐이라, 시작 씬을 열어 놓고 돌리면 게임 컴포넌트 열셋이
+        /// 통째로 "없다"고 나왔다 — 메뉴 화면에 플레이어가 없는 것은 <b>맞는 일</b>인데
+        /// 도구가 그걸 몰랐다. 씬이 둘이 된 순간 생긴 구멍이다.
+        /// </summary>
         static void Components(StringBuilder sb, List<string> fail)
         {
-            sb.AppendLine("[1] 씬에 있어야 할 것");
-            foreach (var n in Needed)
+            string scene = EditorSceneManager.GetActiveScene().name;
+            bool isStart = scene == "Start";
+            var needed = isStart ? NeededInStart : Needed;
+
+            sb.AppendLine("[1] 씬에 있어야 할 것 — 열린 씬 '" + scene + "'"
+                          + (isStart ? " (시작 메뉴)" : " (게임)"));
+            if (!isStart && scene != "Main")
+                sb.AppendLine("    * Main도 Start도 아니다. 게임 씬 기준으로 본다.");
+
+            foreach (var n in needed)
             {
                 var ty = System.Type.GetType(n.type + ", Assembly-CSharp");
                 Object found = ty != null
@@ -83,7 +111,7 @@ namespace Demo.EditorTools
                 sb.AppendLine("    없음: " + line);
                 if (n.vital) fail.Add("씬에 " + line + "이 없다");
             }
-            sb.AppendLine("    확인한 것 " + Needed.Length + "개");
+            sb.AppendLine("    확인한 것 " + needed.Length + "개");
         }
 
         /// <summary>
@@ -168,6 +196,7 @@ namespace Demo.EditorTools
             }
             sb.AppendLine("    통과한 종류 " + ok + "개");
 
+            // 시작 씬에는 ZoneBuilder가 없는 것이 맞다. 없다고 막지 않는다.
             var zone = Object.FindFirstObjectByType<Demo.Core.ZoneBuilder>(FindObjectsInactive.Include);
             if (zone == null) return;
             var zp = new SerializedObject(zone).FindProperty("zone");
@@ -181,13 +210,24 @@ namespace Demo.EditorTools
             sb.AppendLine("[5] 빌드 설정");
 
             var scenes = EditorBuildSettings.scenes;
-            bool hasMain = false;
+            bool hasMain = false, hasStart = false;
             foreach (var s in scenes)
-                if (s.enabled && s.path.EndsWith("Main.unity")) hasMain = true;
+            {
+                if (!s.enabled) continue;
+                if (s.path.EndsWith("Main.unity")) hasMain = true;
+                if (s.path.EndsWith("Start.unity")) hasStart = true;
+            }
 
-            sb.AppendLine("    빌드 씬 " + scenes.Length + "개"
-                          + (hasMain ? " (Main.unity 포함)" : ""));
-            if (!hasMain) fail.Add("빌드 씬 목록에 Main.unity가 없다 — 빌드하면 빈 씬이 나온다");
+            sb.AppendLine("    빌드 씬 " + scenes.Length + "개");
+            for (int i = 0; i < scenes.Length; i++)
+                sb.AppendLine("      " + i + ". " + scenes[i].path + (scenes[i].enabled ? "" : "  [꺼짐]"));
+
+            if (!hasMain) fail.Add("빌드 씬 목록에 Main.unity가 없다 — 빌드하면 게임이 안 들어간다");
+            if (!hasStart) fail.Add("빌드 씬 목록에 Start.unity가 없다 — 시작 메뉴가 안 들어간다");
+
+            // 0번이 앱이 여는 씬이다. 순서가 뒤집히면 메뉴 없이 바로 게임이 뜬다.
+            if (hasStart && scenes.Length > 0 && !scenes[0].path.EndsWith("Start.unity"))
+                fail.Add("빌드 씬 0번이 Start.unity가 아니다 (" + scenes[0].path + ") — 앱이 여는 씬은 0번이다");
 
             if (PlayerSettings.allowedAutorotateToPortrait)
                 sb.AppendLine("    세로 회전이 허용돼 있다 — 폰을 세우면 버튼이 겹친다");

@@ -21,7 +21,15 @@ namespace Demo.EditorTools
     /// </summary>
     public static class MobileSetup
     {
-        const string MainScene = "Assets/_Project/Scenes/Main.unity";
+        /// <summary>
+        /// 빌드에 들어가야 할 씬. <b>순서가 뜻을 갖는다</b> — 0번이 앱이 여는 씬이다.
+        /// 시작 메뉴를 Start.unity로 뗀 뒤로는 그것이 0번이어야 한다 [2026-10-12].
+        /// </summary>
+        static readonly string[] Scenes =
+        {
+            "Assets/_Project/Scenes/Start.unity",
+            "Assets/_Project/Scenes/Main.unity",
+        };
 
         /// <summary>자리표시자다. 기획자가 정하면 바꾼다 — 한 번 올리면 못 바꾸는 값이다.</summary>
         const string Package = "com.juneseo.fp";
@@ -38,7 +46,7 @@ namespace Demo.EditorTools
             sb.AppendLine();
 
             var a = NamedBuildTarget.Android;
-            Line(sb, "빌드 씬", SceneList(), MainScene + " 하나");
+            Line(sb, "빌드 씬", SceneList(), string.Join(" + ", Scenes));
             Line(sb, "활성 타깃", EditorUserBuildSettings.activeBuildTarget.ToString(), "Android");
             Line(sb, "스크립팅", PlayerSettings.GetScriptingBackend(a).ToString(), "IL2CPP");
             Line(sb, "아키텍처", PlayerSettings.Android.targetArchitectures.ToString(), "ARM64");
@@ -65,14 +73,19 @@ namespace Demo.EditorTools
             sb.AppendLine();
 
             // ── 빌드 씬. 제일 중요하다 — 틀리면 빈 씬이 나간다 ────────────────
-            var scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(MainScene);
-            if (scene == null)
+            // 순서까지 중요하다. 0번이 앱이 여는 씬이라 시작 메뉴가 먼저 와야 한다.
+            var list = new System.Collections.Generic.List<EditorBuildSettingsScene>();
+            foreach (string path in Scenes)
             {
-                Debug.LogError("[모바일 설정] " + MainScene + " 를 못 찾았다. 중단한다.");
-                return;
+                if (AssetDatabase.LoadAssetAtPath<SceneAsset>(path) == null)
+                {
+                    Debug.LogError("[모바일 설정] " + path + " 를 못 찾았다. 중단한다.");
+                    return;
+                }
+                list.Add(new EditorBuildSettingsScene(path, true));
             }
             string was = SceneList();
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MainScene, true) };
+            EditorBuildSettings.scenes = list.ToArray();
             sb.AppendLine("  빌드 씬      " + was + "  ->  " + SceneList());
 
             // ── 가로 고정. 세로로 돌면 조이스틱과 버튼이 겹친다 ────────────────

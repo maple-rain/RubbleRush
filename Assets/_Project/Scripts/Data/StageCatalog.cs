@@ -39,14 +39,20 @@ namespace Demo.Data
 
         public Entry[] Stages => stages;
 
-        /// <summary>고를 수 있는 것이 둘 이상인가. 하나뿐이면 고르는 화면을 안 띄운다.</summary>
+        /// <summary>
+        /// 고르는 화면을 띄울 가치가 있는가.
+        ///
+        /// <b>잠긴 칸도 센다</b> [고침 2026-10-12]. 풀린 것만 세면 스테이지가 하나뿐인 지금
+        /// 화면이 아예 안 뜨는데, 기획자가 원한 것은 <b>그 구조가 보이는 것</b>이다 —
+        /// "튜토리얼 다음에 스테이지 1, 2가 온다"가 첫 화면에서 읽혀야 한다.
+        /// 칸이 하나뿐일 때만 건너뛴다. 그때는 고를 것이 없으니 화면이 거짓말이 된다.
+        /// </summary>
         public bool WorthShowing
         {
             get
             {
                 int n = 0;
-                foreach (Entry e in stages)
-                    if (e != null && e.zone != null && !e.locked) n++;
+                foreach (Entry e in stages) if (e != null) n++;
                 return n > 1;
             }
         }
