@@ -177,6 +177,23 @@ namespace Demo.Player
         /// </summary>
         public bool MouseTakenByTouchUi { get; set; }
 
+        bool tapInjected, tapRight;
+
+        /// <summary>
+        /// "지금 한 번 쳤다"를 직접 밀어 넣는다 [2026-10-12]. 파괴 화면의 좌/우 주먹이 쓴다.
+        ///
+        /// <b>왜 눌림 상태로는 안 되는가.</b> <see cref="ActionOverride"/>는 누르고 있는 상태라
+        /// 가장자리(false→true)에서만 한 번 들어간다. 그런데 파괴 화면에서는 양손으로 번갈아
+        /// 연타하는 것이 자연스럽고, 그러면 <b>손가락이 겹쳐 true가 끊기지 않아</b>
+        /// 열 번 쳐도 한 번만 들어간다. 손가락이 새로 닿을 때마다 이걸 부르면 그 문제가 없다.
+        /// </summary>
+        /// <param name="rightArm">오른손인가. 화면 오른쪽을 쳤으면 true다.</param>
+        public void InjectActionPress(bool rightArm)
+        {
+            tapInjected = true;
+            tapRight = rightArm;
+        }
+
         bool runHeldLast, interactHeldLast, dropHeldLast;
 
         void Update()
@@ -195,6 +212,14 @@ namespace Demo.Player
             bool wasHeld = ActionHeld;
             ActionHeld = ActionOverride ?? ActionRaw();
             ActionPressedThisFrame = ActionHeld && !wasHeld;
+
+            // 밀어 넣은 한 방. 아래의 토글·팔 결정은 키보드로 친 것과 똑같이 흐른다.
+            if (tapInjected)
+            {
+                tapInjected = false;
+                StrikeSideOverride = tapRight;
+                ActionPressedThisFrame = true;
+            }
 
             // 누르는 순간마다 뒤집는다. 떼는 것은 아무 일도 하지 않는다.
             if (ActionPressedThisFrame)

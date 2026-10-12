@@ -57,6 +57,23 @@ namespace Demo.UI
         /// <summary>실측·점검용. 지금 쓰는 배치.</summary>
         public TouchPad[] Pads => pads;
 
+        Core.GameModeController mode;
+
+        /// <summary>
+        /// 지금 이 조작이 화면을 맡고 있는가. 필드에서만 맡는다 —
+        /// 타이틀은 <see cref="TitleScreen"/>, 파괴 화면은 <see cref="TouchStrike"/>가 맡는다.
+        /// <b>모드를 모르면 맡는다</b> — 그래야 GameModeController가 없는 씬에서도 조작이 된다.
+        /// </summary>
+        public bool Owns
+        {
+            get
+            {
+                if (TitleScreen.Blocking) return false;
+                if (mode == null) mode = Core.GameModeController.Instance;
+                return mode == null || mode.IsField;
+            }
+        }
+
         void Awake()
         {
             if (router == null) router = FindFirstObjectByType<InputRouter>();
@@ -93,7 +110,10 @@ namespace Demo.UI
 
             // 타이틀/옵션이 떠 있으면 손을 뗀다. 안 그러면 시작 버튼을 누르려다
             // 그 밑의 케이블 버튼까지 같이 눌린다.
-            if (TitleScreen.Blocking) { Clear(); return; }
+            //
+            // 파괴 화면에서도 비켜선다 [지시 2026-10-12]. 거기서는 화면 전체가 좌/우 주먹이라
+            // (<see cref="TouchStrike"/>) 조이스틱과 버튼이 떠 있으면 칠 자리를 잡아먹는다.
+            if (!Owns) { Clear(); return; }
 
             bool sawStick = false;
             var seen = new bool[pads.Length];

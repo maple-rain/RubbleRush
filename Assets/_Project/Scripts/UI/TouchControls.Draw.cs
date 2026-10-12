@@ -24,7 +24,7 @@ namespace Demo.UI
         void OnGUI()
         {
             if (Event.current.type != EventType.Repaint || held == null) return;
-            if (TitleScreen.Blocking) return;
+            if (!Owns) return;          // 타이틀·파괴 화면에서는 안 그린다
 
             bool touching = stickPointer != None;
             for (int i = 0; i < held.Length && !touching; i++) touching = held[i] != None;
