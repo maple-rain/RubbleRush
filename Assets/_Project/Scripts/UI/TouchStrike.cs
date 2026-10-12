@@ -33,16 +33,45 @@ namespace Demo.UI
         [SerializeField, Range(0f, 0.5f), Tooltip("친 쪽이 번쩍하는 시간(초). 0이면 안 그린다")]
         float flashSeconds = 0.12f;
 
+        [SerializeField, Tooltip("몇 대 치면 안내가 옅어지는가. 알고 나면 벽을 가리기만 한다")]
+        int hintFadesAfter = 4;
+
+        [SerializeField, Range(0f, 0.6f), Tooltip("옅어진 뒤에도 남는 정도. 0이면 완전히 사라진다")]
+        float hintResidue = 0.3f;
+
         readonly HashSet<int> down = new HashSet<int>();
         readonly List<int> gone = new List<int>();
 
         float flashUntil;
         bool flashRight;
-        Texture2D px;
+        Texture2D px, disc;
+
+        GUIStyle hand, head;
 
         GameModeController mode;
 
         bool wasActive;
+
+        /// <summary>이번 파괴 화면에서 몇 대 쳤는가. 안내가 옅어지는 기준이다.</summary>
+        int hits;
+
+        /// <summary>
+        /// 안내를 얼마나 진하게 그릴까 (0~1).
+        ///
+        /// <b>처음엔 진하고 치다 보면 옅어진다.</b> 화면 전체가 버튼이라는 것은 한 번 알면
+        /// 끝인데, 안내가 계속 진하면 정작 부수는 벽을 가린다. 그렇다고 아주 지우면 오래
+        /// 쉬었다 온 사람이 다시 헤매므로 흐리게 남긴다.
+        /// <b>구역마다 다시 진해진다</b> — 파괴 화면에 들어올 때마다 0부터 센다.
+        /// </summary>
+        float HintStrength
+        {
+            get
+            {
+                if (hintFadesAfter <= 0) return hintResidue;
+                float t = Mathf.Clamp01(hits / (float)hintFadesAfter);
+                return Mathf.Lerp(1f, hintResidue, t);
+            }
+        }
 
         /// <summary>
         /// 이 화면이 지금 조작을 맡고 있는가.
@@ -61,11 +90,14 @@ namespace Demo.UI
             px.SetPixel(0, 0, Color.white);
             px.Apply();
             px.hideFlags = HideFlags.HideAndDontSave;
+
+            disc = MakeDisc(64);
         }
 
         void OnDestroy()
         {
             if (px != null) Destroy(px);
+            if (disc != null) Destroy(disc);
         }
 
         void Update()
@@ -76,6 +108,7 @@ namespace Demo.UI
             {
                 down.Clear();
                 wasActive = false;
+                hits = 0;                  // 다음 건물에서는 안내가 다시 진해진다
                 return;
             }
 
@@ -123,30 +156,135 @@ namespace Demo.UI
 
             bool right = pos.x >= Screen.width * 0.5f;
             router.InjectActionPress(right);
+            hits++;
 
             flashRight = right;
             flashUntil = Time.unscaledTime + flashSeconds;
+        }
+
+        void OnGUI()
+        {
+            if (Event.current.type != EventType.Repaint || !Active) return;
+            if (hand == null) Styles();
+
+            Hint();
+            Flash();
+        }
+
+        /// <summary>
+        /// <b>화면이 좌우로 갈린다는 것을 보여 준다</b> [지시 2026-10-12].
+        ///
+        /// 이 화면은 버튼이 안 보이는 것이 아니라 <b>화면 전체가 버튼</b>인데, 아무 표시가
+        /// 없으면 그걸 알 길이 없다 — 어디를 눌러야 하는지도, 좌우가 다른 손이라는 것도.
+        /// 가운데 선 하나와 양쪽의 손 표시로 둘을 한 번에 말한다.
+        ///
+        /// <b>벽을 가리면 안 된다.</b> 부수는 장면이 주인공이므로 전부 아래쪽에 깔고,
+        /// 몇 대 치고 나면 옅어진다 (<see cref="HintStrength"/>).
+        /// </summary>
+        void Hint()
+        {
+            float a = HintStrength;
+            if (a <= 0.01f) return;
+
+            float w = Screen.width, h = Screen.height;
+            float half = w * 0.5f;
+
+            // 가운데 선. 좌우가 갈린다는 것을 한 획으로 말한다.
+            Fill(new Rect(half - 1f, h * 0.30f, 2f, h * 0.62f), new Color(1f, 1f, 1f, 0.16f * a));
+
+            // 양쪽 손. 아래쪽에 둬 벽을 안 가린다.
+            float r = h * 0.075f;
+            float y = h * 0.74f;
+            Hand(new Vector2(w * 0.25f, y), r, "왼손", a);
+            Hand(new Vector2(w * 0.75f, y), r, "오른손", a);
+
+            // 처음 들어왔을 때만 한 줄. 알고 나면 사라진다.
+            if (a < 0.75f) return;
+            head.fontSize = Mathf.Max(12, Mathf.RoundToInt(h * 0.035f));
+            Shadow(new Rect(0f, h * 0.20f, w, h * 0.07f), "화면 좌우를 두드려 부순다", head,
+                   new Color(1f, 1f, 1f, 0.9f * a));
+        }
+
+        void Hand(Vector2 c, float r, string text, float a)
+        {
+            Disc(c, r, new Color(0.06f, 0.07f, 0.09f, 0.42f * a));
+            Disc(c, r * 0.9f, new Color(1f, 1f, 1f, 0.07f * a));
+
+            hand.fontSize = Mathf.Max(11, Mathf.RoundToInt(r * 0.42f));
+            Shadow(new Rect(c.x - r, c.y - r, r * 2f, r * 2f), text, hand,
+                   new Color(1f, 1f, 1f, 0.85f * a));
         }
 
         /// <summary>
         /// 친 쪽을 아주 잠깐 밝힌다. 손가락이 화면을 가려서 <b>맞았는지 안 맞았는지</b>가
         /// 안 보이는 일이 흔한데, 반쪽이 번쩍하면 가린 채로도 읽힌다.
         /// </summary>
-        void OnGUI()
+        void Flash()
         {
-            if (Event.current.type != EventType.Repaint) return;
-            if (!Active || flashSeconds <= 0f) return;
+            if (flashSeconds <= 0f) return;
 
             float left = flashUntil - Time.unscaledTime;
             if (left <= 0f) return;
 
             float half = Screen.width * 0.5f;
-            var r = new Rect(flashRight ? half : 0f, 0f, half, Screen.height);
+            Fill(new Rect(flashRight ? half : 0f, 0f, half, Screen.height),
+                 new Color(1f, 1f, 1f, 0.10f * (left / flashSeconds)));
+        }
 
+        // ── 그리기 도구 ──────────────────────────────────────────────────────────
+
+        void Styles()
+        {
+            hand = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                wordWrap = false,
+            };
+            head = new GUIStyle(hand) { fontStyle = FontStyle.Normal };
+        }
+
+        /// <summary>글자 뒤에 그림자를 깐다. 벽이 밝으면 흰 글자만으로는 안 읽힌다.</summary>
+        void Shadow(Rect r, string text, GUIStyle s, Color color)
+        {
+            s.normal.textColor = new Color(0f, 0f, 0f, color.a * 0.6f);
+            GUI.Label(new Rect(r.x + 2f, r.y + 2f, r.width, r.height), text, s);
+            s.normal.textColor = color;
+            GUI.Label(r, text, s);
+        }
+
+        void Fill(Rect r, Color c)
+        {
             Color prev = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, 0.10f * (left / flashSeconds));
+            GUI.color = c;
             GUI.DrawTexture(r, px);
             GUI.color = prev;
+        }
+
+        void Disc(Vector2 center, float radius, Color c)
+        {
+            Color prev = GUI.color;
+            GUI.color = c;
+            GUI.DrawTexture(new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f), disc);
+            GUI.color = prev;
+        }
+
+        static Texture2D MakeDisc(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            float r = size * 0.5f;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
+                    float edge = Mathf.Clamp01(1f - Mathf.Max(0f, d - (r - 1.5f)) / 1.5f);
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(edge * 255f));
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            return tex;
         }
     }
 }
