@@ -48,6 +48,10 @@ namespace Demo.UI
         [SerializeField, Range(0.2f, 0.95f), Tooltip("동그라미 높이. 0=화면 위, 1=아래")]
         float hintHeight = 0.52f;         // 0.74에서 30% 올림 [지시 2026-10-12]
 
+        [SerializeField, Range(0.08f, 0.45f), Tooltip("동그라미가 가장자리에서 얼마나 안쪽인가. " +
+                 "화면 가로 대비. 작을수록 양 끝으로 간다")]
+        float hintInset = 0.21f;          // 0.25에서 4% 바깥으로 [지시 2026-10-12]
+
         [SerializeField, Range(0f, 4f), Tooltip("깜빡이는 속도(초당 횟수). 0이면 안 깜빡인다")]
         float blinkHz = 1.4f;
 
@@ -229,8 +233,8 @@ namespace Demo.UI
             float r = h * hintRadius;
             float y = h * hintHeight;
             float blink = a * Blink;
-            Hand(new Vector2(w * 0.25f, y), r, hintLabel, blink);
-            Hand(new Vector2(w * 0.75f, y), r, hintLabel, blink);
+            Hand(new Vector2(w * hintInset, y), r, hintLabel, blink);
+            Hand(new Vector2(w * (1f - hintInset), y), r, hintLabel, blink);
 
             // 처음 들어왔을 때만 한 줄. 알고 나면 사라진다.
             if (a < 0.75f) return;

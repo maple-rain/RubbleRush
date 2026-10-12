@@ -68,7 +68,9 @@ namespace Demo.Core
 
         void Start()
         {
-            if (autoStart) StartZone(zone);
+            // 시작 씬에서 고른 것이 있으면 그것으로. 없으면 인스펙터에 물린 것 그대로 —
+            // 에디터에서 Main.unity를 직접 열어 돌리는 일이 개발 중에 제일 잦다.
+            if (autoStart) StartZone(Data.StagePick.Or(zone));
         }
 
         public void StartZone(ZoneData data)
