@@ -39,6 +39,21 @@ namespace Demo.UI
         [SerializeField, Range(0f, 0.6f), Tooltip("옅어진 뒤에도 남는 정도. 0이면 완전히 사라진다")]
         float hintResidue = 0.3f;
 
+        [SerializeField, Tooltip("양쪽에 쓰는 글자 [지시 2026-10-12]")]
+        string hintLabel = "TOUCH!";
+
+        [SerializeField, Range(0.03f, 0.2f), Tooltip("동그라미 반경. 화면 세로 대비")]
+        float hintRadius = 0.094f;        // 0.075에서 25% 키움 [지시 2026-10-12]
+
+        [SerializeField, Range(0.2f, 0.95f), Tooltip("동그라미 높이. 0=화면 위, 1=아래")]
+        float hintHeight = 0.52f;         // 0.74에서 30% 올림 [지시 2026-10-12]
+
+        [SerializeField, Range(0f, 4f), Tooltip("깜빡이는 속도(초당 횟수). 0이면 안 깜빡인다")]
+        float blinkHz = 1.4f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("깜빡일 때 제일 어두워지는 정도. 0이면 완전히 꺼진다")]
+        float blinkFloor = 0.35f;
+
         readonly HashSet<int> down = new HashSet<int>();
         readonly List<int> gone = new List<int>();
 
@@ -70,6 +85,23 @@ namespace Demo.UI
                 if (hintFadesAfter <= 0) return hintResidue;
                 float t = Mathf.Clamp01(hits / (float)hintFadesAfter);
                 return Mathf.Lerp(1f, hintResidue, t);
+            }
+        }
+
+        /// <summary>
+        /// 깜빡임 (0~1) [지시 2026-10-12]. 눈길을 끄는 것이 목적이라 <b>켜고 끄는 대신
+        /// 부드럽게 오간다</b> — 딱딱 꺼지면 화면이 번쩍이고, 부술 벽을 보고 있는 눈이 피로하다.
+        ///
+        /// <b>반드시 실제 시간으로 센다.</b> 이 화면은 때릴 때마다 히트스톱으로 timeScale이
+        /// 0이 되는데, 게임 시간을 쓰면 치는 동안 깜빡임이 멈춰 선다.
+        /// </summary>
+        float Blink
+        {
+            get
+            {
+                if (blinkHz <= 0f) return 1f;
+                float wave = 0.5f + 0.5f * Mathf.Cos(Time.unscaledTime * blinkHz * Mathf.PI * 2f);
+                return Mathf.Lerp(blinkFloor, 1f, wave);
             }
         }
 
@@ -192,11 +224,13 @@ namespace Demo.UI
             // 가운데 선. 좌우가 갈린다는 것을 한 획으로 말한다.
             Fill(new Rect(half - 1f, h * 0.30f, 2f, h * 0.62f), new Color(1f, 1f, 1f, 0.16f * a));
 
-            // 양쪽 손. 아래쪽에 둬 벽을 안 가린다.
-            float r = h * 0.075f;
-            float y = h * 0.74f;
-            Hand(new Vector2(w * 0.25f, y), r, "왼손", a);
-            Hand(new Vector2(w * 0.75f, y), r, "오른손", a);
+            // 양쪽의 누를 자리. 깜빡이는 것은 이것뿐이다 — 가운데 선까지 같이 깜빡이면
+            // 화면이 산만해지고, 선은 '갈려 있다'는 구조라 가만히 있는 편이 읽힌다.
+            float r = h * hintRadius;
+            float y = h * hintHeight;
+            float blink = a * Blink;
+            Hand(new Vector2(w * 0.25f, y), r, hintLabel, blink);
+            Hand(new Vector2(w * 0.75f, y), r, hintLabel, blink);
 
             // 처음 들어왔을 때만 한 줄. 알고 나면 사라진다.
             if (a < 0.75f) return;
@@ -210,7 +244,8 @@ namespace Demo.UI
             Disc(c, r, new Color(0.06f, 0.07f, 0.09f, 0.42f * a));
             Disc(c, r * 0.9f, new Color(1f, 1f, 1f, 0.07f * a));
 
-            hand.fontSize = Mathf.Max(11, Mathf.RoundToInt(r * 0.42f));
+            // "TOUCH!"는 "왼손"보다 세 배 길다. 비율을 그대로 두면 동그라미를 넘친다.
+            hand.fontSize = Mathf.Max(11, Mathf.RoundToInt(r * 0.36f));
             Shadow(new Rect(c.x - r, c.y - r, r * 2f, r * 2f), text, hand,
                    new Color(1f, 1f, 1f, 0.85f * a));
         }
