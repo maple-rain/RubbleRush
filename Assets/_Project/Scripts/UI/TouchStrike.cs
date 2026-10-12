@@ -42,8 +42,16 @@ namespace Demo.UI
 
         GameModeController mode;
 
-        /// <summary>이 화면이 지금 조작을 맡고 있는가.</summary>
-        bool Active => mode != null && !mode.IsField && !TitleScreen.Blocking;
+        bool wasActive;
+
+        /// <summary>
+        /// 이 화면이 지금 조작을 맡고 있는가.
+        ///
+        /// <b><c>!IsField</c>가 아니라 <c>IsDemolition</c>이다</b> [고침 2026-10-12].
+        /// 모드가 셋이다 — Field · Demolition · <b>Ended</b>. 뒤집어 쓰면 구역이 끝난 뒤에도
+        /// 화면을 치면 주먹이 나간다. Ended는 "입력을 받지 않는다"고 못 박힌 상태다.
+        /// </summary>
+        bool Active => mode != null && mode.IsDemolition && !TitleScreen.Blocking;
 
         void Awake()
         {
@@ -66,14 +74,26 @@ namespace Demo.UI
 
             if (!Active)
             {
-                // 필드로 나가면 들고 있던 것을 놓는다. 안 그러면 다음에 들어올 때
-                // 이미 닿아 있던 손가락으로 쳤다고 잘못 센다.
                 down.Clear();
-                if (router != null) router.StrikeSideOverride = null;
+                wasActive = false;
                 return;
             }
 
             var ts = Touchscreen.current;
+
+            // <b>들어오는 순간 이미 닿아 있던 손가락은 센 것으로 친다</b> [고침 2026-10-12].
+            // 부수기 프롬프트를 누른 그 손가락이 화면에 남아 있는 채로 모드가 바뀌므로,
+            // 그대로 두면 <b>누르지도 않은 한 방</b>이 공짜로 들어간다 — 들어가자마자
+            // 벽이 한 대 맞는다. 첫 프레임에는 세기만 하고 치지 않는다.
+            if (!wasActive)
+            {
+                wasActive = true;
+                down.Clear();
+                if (ts != null)
+                    foreach (TouchControl t in ts.touches)
+                        if (t.press.isPressed) down.Add(t.touchId.ReadValue());
+                return;
+            }
             if (ts != null)
             {
                 gone.Clear();

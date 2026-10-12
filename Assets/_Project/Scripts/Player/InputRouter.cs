@@ -177,7 +177,17 @@ namespace Demo.Player
         /// </summary>
         public bool MouseTakenByTouchUi { get; set; }
 
-        bool tapInjected, tapRight;
+        /// <summary>
+        /// 밀어 넣은 타격이 줄을 선다. <b>bool 하나로는 같은 프레임에 들어온 둘째가 사라진다</b>
+        /// [고침 2026-10-12] — 양손이 한 프레임 안에 닿으면 한 대가 조용히 없어진다.
+        /// 한 프레임에 하나씩 꺼내므로 늦어 봐야 16ms고, 사라지지는 않는다.
+        ///
+        /// 길이를 막아 둔다. 어딘가 멈춰서 안 꺼내 가면 끝없이 쌓이는데, 그때 밀린 타격이
+        /// 한꺼번에 쏟아지는 것보다 버리는 쪽이 낫다.
+        /// </summary>
+        readonly System.Collections.Generic.Queue<bool> taps = new System.Collections.Generic.Queue<bool>();
+
+        const int MaxQueuedTaps = 4;
 
         /// <summary>
         /// "지금 한 번 쳤다"를 직접 밀어 넣는다 [2026-10-12]. 파괴 화면의 좌/우 주먹이 쓴다.
@@ -190,8 +200,7 @@ namespace Demo.Player
         /// <param name="rightArm">오른손인가. 화면 오른쪽을 쳤으면 true다.</param>
         public void InjectActionPress(bool rightArm)
         {
-            tapInjected = true;
-            tapRight = rightArm;
+            if (taps.Count < MaxQueuedTaps) taps.Enqueue(rightArm);
         }
 
         bool runHeldLast, interactHeldLast, dropHeldLast;
@@ -213,19 +222,19 @@ namespace Demo.Player
             ActionHeld = ActionOverride ?? ActionRaw();
             ActionPressedThisFrame = ActionHeld && !wasHeld;
 
-            // 밀어 넣은 한 방. 아래의 토글·팔 결정은 키보드로 친 것과 똑같이 흐른다.
-            if (tapInjected)
-            {
-                tapInjected = false;
-                StrikeSideOverride = tapRight;
-                ActionPressedThisFrame = true;
-            }
+            // 밀어 넣은 한 방. 아래의 토글은 키보드로 친 것과 똑같이 흐른다.
+            //
+            // <b>StrikeSideOverride에 담지 않는다</b> [고침 2026-10-12]. 그건 붙잡는 성질의
+            // 손잡이라, 한 번 넣으면 파괴 화면을 나간 뒤에도 남아 필드에서 팔이 교대하지 않는다.
+            // 이 한 방의 손은 이 프레임에서만 쓰고 버린다.
+            bool? injected = taps.Count > 0 ? taps.Dequeue() : (bool?)null;
+            if (injected.HasValue) ActionPressedThisFrame = true;
 
             // 누르는 순간마다 뒤집는다. 떼는 것은 아무 일도 하지 않는다.
             if (ActionPressedThisFrame)
             {
                 ActionActive = !ActionActive;
-                StrikeRightArm = DecideStrikeSide();
+                StrikeRightArm = injected ?? DecideStrikeSide();
             }
 
             DropPressedThisFrame = Edge(DropOverride, ref dropHeldLast, dropAction);

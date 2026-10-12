@@ -50,7 +50,7 @@ namespace Demo.UI
         /// <summary>버튼마다 그것을 쥐고 있는 손가락. 없으면 <see cref="None"/>.</summary>
         int[] held;
 
-        Texture2D disc;
+        Texture2D disc, ring;
 
         float StickRadius => Screen.height * stickRadiusFraction;
 
@@ -98,6 +98,7 @@ namespace Demo.UI
         void OnDestroy()
         {
             if (disc != null) Destroy(disc);
+            if (ring != null) Destroy(ring);
         }
 
         /// <summary>
