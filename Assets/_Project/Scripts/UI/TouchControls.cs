@@ -34,9 +34,10 @@ namespace Demo.UI
         [SerializeField, Tooltip("버튼 배치. 비면 TouchPad.Default()를 쓴다")]
         TouchPad[] pads = new TouchPad[0];
 
-        [SerializeField, Tooltip("마우스를 손가락처럼 쓴다. PC 우선인 동안은 꺼 둔다 — " +
-                                 "켜면 클릭이 조이스틱이 되어 키보드 조작과 섞인다")]
-        bool mouseActsAsTouch = false;
+        [SerializeField, Tooltip("마우스를 손가락처럼 쓴다. 실기가 없어서 기본으로 켜 둔다 — " +
+                                 "에디터에서 왼쪽 절반을 끌면 조이스틱, 오른쪽 동그라미는 버튼이다.\n" +
+                                 "켜면 마우스 왼쪽 버튼은 행동으로 안 간다 (스페이스는 그대로).")]
+        bool mouseActsAsTouch = true;
 
         [SerializeField, Tooltip("아무도 안 누르고 있어도 버튼을 보여 준다")]
         bool showWhenNoTouch = true;
@@ -63,12 +64,16 @@ namespace Demo.UI
             held = new int[pads.Length];
             for (int i = 0; i < held.Length; i++) held[i] = None;
 
-            // PC에서는 조용히 빠진다. 켜져 있으면 OnGUI가 버튼을 그려서 시야를 가린다.
+            // 터치도 없고 마우스도 안 쓰기로 했으면 조용히 빠진다.
             if (autoDisableWithoutTouchscreen && Touchscreen.current == null && !mouseActsAsTouch)
             {
                 enabled = false;
                 return;
             }
+
+            // 마우스를 손가락으로 쓰는 동안은 행동 버튼의 마우스 바인딩을 막는다.
+            // 안 막으면 왼쪽 절반을 끌어 걷는 내내 그 클릭이 행동으로도 들어가 케이블이 토글된다.
+            if (router != null) router.MouseTakenByTouchUi = mouseActsAsTouch;
 
             disc = MakeDisc(64);
         }

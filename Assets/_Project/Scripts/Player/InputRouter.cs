@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 namespace Demo.Player
 {
@@ -163,6 +164,19 @@ namespace Demo.Player
         /// <inheritdoc cref="InteractOverride"/>
         public bool? DropOverride { get; set; }
 
+        /// <summary>
+        /// 터치 UI가 마우스를 손가락으로 쓰고 있다 [2026-10-12]. 켜면 <b>마우스 왼쪽 버튼이
+        /// 행동으로 안 간다</b>.
+        ///
+        /// <b>왜 필요한가.</b> 행동 버튼에는 <c>&lt;Mouse&gt;/leftButton</c>이 묶여 있다.
+        /// 실기가 없어서 마우스로 모바일 UI를 확인하게 해 놓으면, 왼쪽 절반을 끌어 조이스틱을
+        /// 미는 동안 <b>그 클릭이 행동으로도 들어가</b> 걸음마다 케이블이 토글된다 —
+        /// 이 파일 아래쪽에 터치에 대해 적어 둔 경고와 같은 사고가 마우스로 재현되는 것이다.
+        ///
+        /// 키보드와 게임패드는 그대로 둔다. 막는 것은 마우스뿐이다.
+        /// </summary>
+        public bool MouseTakenByTouchUi { get; set; }
+
         bool runHeldLast, interactHeldLast, dropHeldLast;
 
         void Update()
@@ -179,10 +193,8 @@ namespace Demo.Player
             }
 
             bool wasHeld = ActionHeld;
-            ActionHeld = ActionOverride ?? actionButton.IsPressed();
-            ActionPressedThisFrame = ActionOverride.HasValue
-                ? (ActionHeld && !wasHeld)
-                : actionButton.WasPressedThisFrame();
+            ActionHeld = ActionOverride ?? ActionRaw();
+            ActionPressedThisFrame = ActionHeld && !wasHeld;
 
             // 누르는 순간마다 뒤집는다. 떼는 것은 아무 일도 하지 않는다.
             if (ActionPressedThisFrame)
@@ -196,6 +208,22 @@ namespace Demo.Player
 
             // 달리기도 같은 토글 방식. 가상 버튼이 있으면 그 쪽의 누르는 순간을 쓴다.
             if (Edge(RunOverride, ref runHeldLast, runAction)) RunActive = !RunActive;
+        }
+
+        /// <summary>
+        /// 행동 버튼이 눌려 있는가. <see cref="MouseTakenByTouchUi"/>가 켜져 있으면
+        /// <b>마우스만 빼고</b> 본다 — 키보드 스페이스와 게임패드는 그대로 살아 있다.
+        /// </summary>
+        bool ActionRaw()
+        {
+            if (!MouseTakenByTouchUi) return actionButton.IsPressed();
+
+            foreach (InputControl c in actionButton.controls)
+            {
+                if (c.device is Mouse) continue;
+                if (c is ButtonControl b && b.isPressed) return true;
+            }
+            return false;
         }
 
         /// <summary>

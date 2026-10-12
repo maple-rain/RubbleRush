@@ -42,6 +42,9 @@ namespace Demo.UI
         [SerializeField, Tooltip("터치가 없으면 키 이름을 보여 준다")]
         bool showKeysOnDesktop = true;
 
+        [SerializeField, Tooltip("마우스로도 누를 수 있게 한다. 실기가 없어서 기본으로 켜 둔다")]
+        bool mouseActsAsTouch = true;
+
         /// <summary>한 줄. 무엇을 누르면 무엇이 일어나는가.</summary>
         struct Row
         {
@@ -78,29 +81,37 @@ namespace Demo.UI
         void Update()
         {
             Gather();
-            if (!Touch) { Release(); return; }
 
             // 눌린 줄을 찾는다. 한 번 잡으면 뗄 때까지 유지한다.
             bool stillDown = false;
-            foreach (TouchControl t in Touchscreen.current.touches)
-            {
-                if (!t.press.isPressed) continue;
-                int id = t.touchId.ReadValue();
-                Vector2 pos = t.position.ReadValue();
 
-                if (heldPointer == id) { stillDown = true; break; }
-                if (heldRow >= 0) continue;
+            if (Touch)
+                foreach (TouchControl t in Touchscreen.current.touches)
+                {
+                    if (!t.press.isPressed) continue;
+                    if (Claim(t.touchId.ReadValue(), t.position.ReadValue())) { stillDown = true; break; }
+                }
 
-                int hit = RowAt(pos);
-                if (hit < 0) continue;
-                heldRow = hit;
-                heldPointer = id;
-                stillDown = true;
-                break;
-            }
+            // 실기가 없어서 마우스로도 누를 수 있어야 한다 — 손가락 하나로 친다.
+            if (!stillDown && mouseActsAsTouch && Mouse.current != null && Mouse.current.leftButton.isPressed)
+                stillDown = Claim(int.MinValue, Mouse.current.position.ReadValue());
 
             if (!stillDown) { Release(); return; }
             if (heldRow >= 0 && heldRow < rows.Count) Push(rows[heldRow].Id, true);
+        }
+
+        /// <summary>그 포인터가 어떤 줄을 쥐고 있는가. 새로 잡기도 한다.</summary>
+        bool Claim(int id, Vector2 pos)
+        {
+            if (heldPointer == id) return true;
+            if (heldRow >= 0) return false;
+
+            int hit = RowAt(pos);
+            if (hit < 0) return false;
+
+            heldRow = hit;
+            heldPointer = id;
+            return true;
         }
 
         void Release()
