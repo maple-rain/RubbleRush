@@ -61,9 +61,20 @@ namespace Demo.UI
         readonly HashSet<int> down = new HashSet<int>();
         readonly List<int> gone = new List<int>();
 
+        [SerializeField, Range(0f, 0.6f), Tooltip("친 자리에서 고리가 퍼지는 시간(초). 0이면 안 그린다")]
+        float rippleSeconds = 0.3f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("친 쪽 동그라미가 얼마나 커졌다 돌아오는가")]
+        float popScale = 0.35f;
+
         float flashUntil;
         bool flashRight;
-        Texture2D px, disc;
+
+        /// <summary>마지막으로 친 자리와 그때. 퍼지는 고리와 눌린 쪽 강조가 이걸 본다.</summary>
+        Vector2 hitAt;
+        float hitTime = -99f;
+
+        Texture2D px, disc, ring;
 
         GUIStyle hand, head;
 
@@ -128,12 +139,14 @@ namespace Demo.UI
             px.hideFlags = HideFlags.HideAndDontSave;
 
             disc = MakeDisc(64);
+            ring = MakeRing(96, 0.10f);
         }
 
         void OnDestroy()
         {
             if (px != null) Destroy(px);
             if (disc != null) Destroy(disc);
+            if (ring != null) Destroy(ring);
         }
 
         void Update()
@@ -196,6 +209,8 @@ namespace Demo.UI
 
             flashRight = right;
             flashUntil = Time.unscaledTime + flashSeconds;
+            hitAt = pos;
+            hitTime = Time.unscaledTime;
         }
 
         void OnGUI()
@@ -205,6 +220,7 @@ namespace Demo.UI
 
             Hint();
             Flash();
+            Ripple();
         }
 
         /// <summary>
@@ -232,15 +248,62 @@ namespace Demo.UI
             // 화면이 산만해지고, 선은 '갈려 있다'는 구조라 가만히 있는 편이 읽힌다.
             float r = h * hintRadius;
             float y = h * hintHeight;
+            // 친 쪽은 잠깐 커진다. 손가락이 가린 채로도 "이쪽이 먹었다"가 보인다.
             float blink = a * Blink;
-            Hand(new Vector2(w * hintInset, y), r, hintLabel, blink);
-            Hand(new Vector2(w * (1f - hintInset), y), r, hintLabel, blink);
+            float pop = Pop();
+            Hand(new Vector2(w * hintInset, y), r * (flashRight ? 1f : pop), hintLabel, blink);
+            Hand(new Vector2(w * (1f - hintInset), y), r * (flashRight ? pop : 1f), hintLabel, blink);
 
             // 처음 들어왔을 때만 한 줄. 알고 나면 사라진다.
             if (a < 0.75f) return;
             head.fontSize = Mathf.Max(12, Mathf.RoundToInt(h * 0.035f));
             Shadow(new Rect(0f, h * 0.20f, w, h * 0.07f), "화면 좌우를 두드려 부순다", head,
                    new Color(1f, 1f, 1f, 0.9f * a));
+        }
+
+        /// <summary>
+        /// 친 쪽 동그라미의 배율 (1 이상) [지시 2026-10-12].
+        ///
+        /// 기획자가 "터치 시 강조가 되었으면 한다"고 물었다. 쓸 수 있는 손이 넷이었다:
+        /// <list type="number">
+        /// <item>반쪽 번쩍 — 이미 있다. 넓어서 눈에 띄지만 <b>어디를 눌렀는지</b>는 안 알려 준다</item>
+        /// <item><b>눌린 쪽이 커졌다 돌아온다</b> — 누른 것과 반응이 같은 자리라 제일 잘 붙는다</item>
+        /// <item><b>친 자리에서 고리가 퍼진다</b> — 손가락 바로 밑이라 가려도 가장자리가 보인다</item>
+        /// <item>색이 확 밝아진다 — 깜빡임과 섞여 무엇이 무엇인지 흐려진다</item>
+        /// </list>
+        /// 2와 3을 같이 쓴다. 1은 그대로 두되 바탕 역할만 한다. 4는 안 쓴다.
+        ///
+        /// 커졌다가 <b>돌아오는</b> 모양이라 한 방마다 끊겨 보인다 — 연타해도 뭉개지지 않는다.
+        /// </summary>
+        float Pop()
+        {
+            if (popScale <= 0f || flashSeconds <= 0f) return 1f;
+
+            float t = (Time.unscaledTime - hitTime) / flashSeconds;
+            if (t < 0f || t > 1f) return 1f;
+
+            // 빠르게 커지고 천천히 돌아온다. 같은 속도로 오가면 '튕김'이 안 느껴진다.
+            return 1f + popScale * Mathf.Sin(Mathf.PI * Mathf.Pow(t, 0.55f));
+        }
+
+        /// <summary>
+        /// 친 자리에서 퍼지는 고리. <b>손가락이 가리는 자리를 피해 바깥으로 자란다</b> —
+        /// 점으로 찍으면 손가락 밑에 깔려 안 보인다.
+        /// </summary>
+        void Ripple()
+        {
+            if (rippleSeconds <= 0f || ring == null) return;
+
+            float t = (Time.unscaledTime - hitTime) / rippleSeconds;
+            if (t < 0f || t > 1f) return;
+
+            float r = Screen.height * Mathf.Lerp(0.03f, 0.16f, t);
+            Vector2 g = new Vector2(hitAt.x, Screen.height - hitAt.y);
+
+            Color prev = GUI.color;
+            GUI.color = new Color(1f, 0.85f, 0.4f, 0.55f * (1f - t));
+            GUI.DrawTexture(new Rect(g.x - r, g.y - r, r * 2f, r * 2f), ring);
+            GUI.color = prev;
         }
 
         void Hand(Vector2 c, float r, string text, float a)
@@ -306,6 +369,29 @@ namespace Demo.UI
             GUI.color = c;
             GUI.DrawTexture(new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f), disc);
             GUI.color = prev;
+        }
+
+        /// <summary>속이 빈 동그라미. 안팎 양쪽 테를 깎아야 두 선이 다 매끈하다.</summary>
+        static Texture2D MakeRing(int size, float thickness)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            float outer = size * 0.5f;
+            float inner = outer * (1f - thickness);
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(outer, outer));
+                    float a = Mathf.Clamp01(1f - Mathf.Max(0f, d - (outer - 1.5f)) / 1.5f)
+                            * Mathf.Clamp01(1f - Mathf.Max(0f, inner - d) / 1.5f);
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            return tex;
         }
 
         static Texture2D MakeDisc(int size)

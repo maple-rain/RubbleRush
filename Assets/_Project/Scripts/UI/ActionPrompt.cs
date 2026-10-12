@@ -58,6 +58,9 @@ namespace Demo.UI
         int heldRow = -1;               // 지금 눌려 있는 줄. 없으면 -1
         int heldPointer = -1;
 
+        /// <summary>부수기가 막힌 사유. 없으면 null.</summary>
+        string blocked;
+
         Texture2D disc;
         GUIStyle label, keyCap;
 
@@ -114,9 +117,22 @@ namespace Demo.UI
             return true;
         }
 
+        /// <summary>
+        /// 손을 뗀다. <b>이 컴포넌트가 미는 채널을 전부 비운다</b> [고침 2026-10-12].
+        ///
+        /// 전에는 줄 번호로 기억했다가 그 줄의 것만 비웠는데, 줄 목록은 매 프레임 다시
+        /// 만들어진다 — 잡을 때 0번이 '부수기'였어도 놓을 때 0번이 '놓기'일 수 있고,
+        /// 그러면 놓기만 풀리고 <b>부수기가 눌린 채로 남는다</b>. 눌린 채로 남으면
+        /// 가장자리(false→true)가 영영 안 와서 E가 다시는 안 먹는다.
+        /// 채널이 둘뿐이라 전부 비우는 쪽이 싸고 틀릴 여지가 없다.
+        /// </summary>
         void Release()
         {
-            if (heldRow >= 0) Push(rows.Count > heldRow ? rows[heldRow].Id : TouchButton.Interact, null);
+            if (heldRow >= 0 || heldPointer != -1)
+            {
+                Push(TouchButton.Interact, null);
+                Push(TouchButton.Drop, null);
+            }
             heldRow = -1;
             heldPointer = -1;
         }
@@ -141,6 +157,19 @@ namespace Demo.UI
 
             var mode = GameModeController.Instance;
             if (mode == null || !mode.IsField) return;      // 파괴 화면에서는 안 띄운다
+
+            // 막혀 있으면 <b>왜 막혔는지</b>를 띄운다 [2026-10-12].
+            //
+            // InteractionProbe는 사유를 계산해 두고 있었는데(BlockedReason) 그리는 데가
+            // 디버그 오버레이뿐이었고, 그 오버레이는 기본 꺼짐이다. 그래서 "E가 안 먹는다"로만
+            // 보였다 — 견인 중이라 막힌 것인지, 너무 빨리 지나가서인지 알 수가 없다.
+            // 그 코드의 주석에 "'왜 안 되지'를 플레이어가 추측하게 두면 안 된다"고 적혀 있다.
+            if (probe != null && !probe.PromptVisible && !string.IsNullOrEmpty(probe.BlockedReason))
+            {
+                blocked = probe.BlockedReason;
+                return;
+            }
+            blocked = null;
 
             if (probe != null && probe.PromptVisible)
             {
@@ -201,10 +230,11 @@ namespace Demo.UI
 
         void OnGUI()
         {
-            if (Event.current.type != EventType.Repaint || rows.Count == 0) return;
-            if (!Touch && !showKeysOnDesktop) return;
-
+            if (Event.current.type != EventType.Repaint) return;
             if (label == null) Styles();
+
+            if (rows.Count == 0) { Blocked(); return; }
+            if (!Touch && !showKeysOnDesktop) return;
 
             float r = Screen.height * knobFraction;
             for (int i = 0; i < rows.Count; i++)
@@ -229,6 +259,40 @@ namespace Demo.UI
                 var box = new Rect(g.x + r * 1.25f, g.y - r * 0.7f, Screen.width * 0.3f, r * 1.4f);
                 GUI.Label(box, rows[i].Text, label);
             }
+        }
+
+        /// <summary>
+        /// 왜 못 부수는지 한 줄 [2026-10-12]. 플레이어 위에 흐리게 띄운다.
+        ///
+        /// <b>부수기 프롬프트와 같은 자리다.</b> 거기에 뜰 것이 떴어야 하는데 못 떴다는
+        /// 뜻이므로, 다른 데 띄우면 둘을 잇기 어렵다. 색은 죽여서 "할 수 있는 것"이 아니라
+        /// "안 되는 이유"로 읽히게 한다.
+        /// </summary>
+        void Blocked()
+        {
+            if (string.IsNullOrEmpty(blocked) || eye == null) return;
+
+            var mode = GameModeController.Instance;
+            if (mode == null || !mode.IsField) return;
+
+            Transform who = cargo != null ? cargo.transform : transform;
+            Vector3 p = eye.WorldToScreenPoint(who.position + Vector3.up * 2.2f);
+            if (p.z <= 0f) return;
+
+            float r = Screen.height * knobFraction;
+            var box = new Rect(p.x - Screen.width * 0.2f, Screen.height - p.y - r * 0.6f,
+                               Screen.width * 0.4f, r * 1.2f);
+
+            label.alignment = TextAnchor.MiddleCenter;
+            label.fontSize = Mathf.Max(11, Mathf.RoundToInt(r * 0.5f));
+
+            label.normal.textColor = new Color(0f, 0f, 0f, 0.5f);
+            GUI.Label(new Rect(box.x + 2f, box.y + 2f, box.width, box.height), blocked, label);
+            label.normal.textColor = new Color(1f, 0.78f, 0.6f, 0.75f);
+            GUI.Label(box, blocked, label);
+
+            label.alignment = TextAnchor.MiddleLeft;
+            label.normal.textColor = new Color(1f, 1f, 1f, 0.95f);
         }
 
         void Styles()
