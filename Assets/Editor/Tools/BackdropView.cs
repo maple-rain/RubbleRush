@@ -23,6 +23,7 @@ namespace Demo.EditorTools
 
         public bool Valid;
         public float Pitch;          // 내려다보는 각도(도)
+        public float Yaw;            // 수평 회전(도). 고정이다
         public float Fov;
         public float Distance;       // 기본 줌에서 초점까지
         public float ZoomMax;
@@ -57,6 +58,7 @@ namespace Demo.EditorTools
 
             var so = new SerializedObject(follow);
             v.Pitch = Prop(so, "pitch", 50f);
+            v.Yaw = Prop(so, "yaw", 45f);
             v.EyeHeight = Prop(so, "eyeHeight", 1.5f);
             v.Fov = cam.fieldOfView;
             v.Distance = conf.cameraDistance;

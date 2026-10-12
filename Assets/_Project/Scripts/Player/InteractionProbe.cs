@@ -64,16 +64,26 @@ namespace Demo.Player
 
             Candidate = null;
             BlockedReason = null;
+            if (player == null) return;
 
-            if (player == null || player.IsStunned) { BlockedReason = "정지 중"; return; }
+            // <b>대상을 먼저 찾는다</b> [고침 2026-10-12]. 예전에는 막힌 조건을 먼저 보고
+            // 바로 빠져나갔는데, 그러면 <b>근처에 건물이 없어도</b> 사유가 들어찬다 —
+            // 짐을 끌고 빈 벌판을 걸어가는 내내 "견인 중"이 떠 있었다.
+            // 사유는 <b>부술 것이 눈앞에 있는데 못 부를 때</b>만 뜻이 있다.
+            Destructible near = FindNearest();
+            if (near == null) return;
 
-            // 끌고 가는 중에는 부술 수 없다 — 두 동사가 갈려야 판단이 된다 (GAME_DESIGN §3)
+            // 넘어져 있는 동안은 아무 말도 안 한다. 쓰러진 그림이 이미 이유다.
+            if (player.IsStunned) return;
+
+            // 끌고 가는 중에는 부술 수 없다 — 두 동사가 갈려야 판단이 된다 (GAME_DESIGN §3).
+            // 이것 하나만 글로 말한다. 짐을 놓으면 열린다는 것이 화면에 안 적혀 있다.
             if (cargo != null && !cargo.IsEmpty) { BlockedReason = "견인 중"; return; }
 
-            if (player.CurrentSpeed > stillSpeedThreshold) { BlockedReason = "이동 중"; return; }
-
-            Destructible near = FindNearest();
-            if (near == null) { BlockedReason = null; return; }
+            // <b>달리는 중이라는 말은 안 띄운다</b> [지시 2026-10-12]. 멈추면 저절로 열리는
+            // 것이라 글로 설명할 값어치가 없고, 이동이 잦은 만큼 화면에 늘 떠 있게 된다.
+            // 문턱 자체는 그대로다 — 지나가며 눌리는 것을 막는 것이 원래 목적이다.
+            if (player.CurrentSpeed > stillSpeedThreshold) return;
 
             Candidate = near;
 

@@ -78,7 +78,6 @@ namespace Demo.EditorTools
             ("Demo.UI.TouchControls",        "터치 조이스틱·버튼", true),
             ("Demo.UI.ActionPrompt",         "부수기/놓기 프롬프트", true),
             ("Demo.UI.HUD",                  "시간·할당량 표시",   true),
-            ("Demo.UI.TitleScreen",          "시작 화면",          false),
             ("Demo.UI.ResultScreen",         "결과 화면",          false),
         };
 

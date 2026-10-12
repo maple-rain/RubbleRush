@@ -110,6 +110,7 @@ namespace Demo.Core
             Debris.ClearRegistry();
             Hazard.ObstacleField.Clear();
             Destruction.StageSkin.Clear();   // 단계별 머티리얼도 같이 거둔다
+            Destruction.FaceSkin.Clear();    // 네 면 UV로 접어 둔 메시도 같이
             StructureCount = 0;
         }
     }

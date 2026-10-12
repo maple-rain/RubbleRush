@@ -34,6 +34,12 @@ namespace Demo.Data
         [Tooltip("후면. 입구 없음")]   public Texture2D facadeBack;
         [Tooltip("좌측면. 입구 없음")] public Texture2D facadeLeft;
 
+        [Tooltip("네 면을 한 장에 모은 것. 'Demo/25. 건물 네 면 아틀라스 굽기'가 채운다.\n" +
+                 "필드의 상자는 서브메시가 하나라 그림도 한 장만 붙는다 — 그 한 장이 정면도이면 " +
+                 "네 벽 모두에 입구가 보이고, 플레이어는 어느 쪽이 정면인지 알 수 없다.\n" +
+                 "비면 예전처럼 정면도 한 장을 네 면에 쓴다 — 깨지지는 않는다")]
+        public Texture2D facadeAtlas;
+
         [Header("파괴 단계별 정면 — 필드의 상자에 입힌다 [2026-10-08]")]
         [Tooltip("파손. 금이 가고 벽돌이 떨어진 같은 건물.\n" +
                  "비면 온전한 것을 그대로 쓴다 — 단계가 안 보일 뿐 깨지지 않는다")]
@@ -54,6 +60,10 @@ namespace Demo.Data
         ///
         /// <b>파괴 화면과는 다른 축이다.</b> 거기서는 벽이 보로노이로 조각나 떨어지므로
         /// 그림을 갈아 끼울 자리가 없다 — 단계는 <b>필드에 서 있는 상자</b>가 보여 준다.
+        ///
+        /// <b>온전 단계는 아틀라스를 쓴다</b> [2026-10-12] — 그때만 네 면이 다 보이고,
+        /// 파손·잔해는 한 장으로 족하다. 아틀라스를 돌려줄 때는 메시의 UV도 같이 접혀 있어야
+        /// 한다 (<see cref="Destruction.FaceSkin"/>) — 둘은 <see cref="facadeAtlas"/> 하나로 묶인다.
         /// </summary>
         public Texture2D FacadeForState(Destruction.Destructible.State state)
         {
@@ -61,7 +71,7 @@ namespace Demo.Data
             {
                 case Destruction.Destructible.State.Damaged: return facadeDamaged != null ? facadeDamaged : facadeFront;
                 case Destruction.Destructible.State.Rubble:  return facadeRubble != null ? facadeRubble : facadeDamaged != null ? facadeDamaged : facadeFront;
-                default: return facadeFront;
+                default: return facadeAtlas != null ? facadeAtlas : facadeFront;
             }
         }
 

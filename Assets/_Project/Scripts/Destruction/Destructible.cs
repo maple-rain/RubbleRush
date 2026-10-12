@@ -12,7 +12,7 @@ namespace Demo.Destruction
     /// 먼지·흔들림·소리가 그 프레임을 덮는다. 비용이 일정해서 모바일에서 돈다.
     /// 설득력은 메시가 아니라 연출 레이어에서 나온다.
     /// </summary>
-    public sealed class Destructible : MonoBehaviour
+    public sealed partial class Destructible : MonoBehaviour
     {
         public enum State { Intact, Damaged, Rubble }
 
@@ -83,6 +83,18 @@ namespace Demo.Destruction
             foreach (var c in go.GetComponentsInChildren<Collider>(true)) Destroy(c);
 
             MeshFit.Fit(go, size);
+
+            // 온전 단계만 <b>네 면을 따로</b> 입는다 [2026-10-12].
+            //
+            // 기본 Cube는 서브메시가 하나라 그림도 한 장만 붙는다. 그 한 장이 정면도였으므로
+            // 필드에서는 어느 쪽으로 돌아가도 입구가 보였고, 플레이어는 측면을 정면으로 알고
+            // E를 눌렀다 — "정면에서 눌렀는데 측면이 나온다"의 정체다 (FaceSkin 참조).
+            // 파손·잔해는 한 장으로 족하다. 그 단계에서는 면을 가려 들어갈 일이 없다.
+            if (label == "Intact" && Data.facadeAtlas != null)
+            {
+                FaceSkin.Apply(go);
+                intactAtlassed = true;
+            }
 
             // 단계마다 제 렌더러를 기억해 둔다. 그림을 입힐 때 <b>보이는 쪽</b>에 입혀야 한다
             // (규칙 5 — 찾는 일은 여기서 한 번만).
@@ -178,43 +190,6 @@ namespace Demo.Destruction
         }
 
         float rubbleSince = -1f;
-
-        // 단계마다 하나씩. 하나로 묶어 캐시하면 켜져 있지 않은 메시에 그림을 입히게 된다.
-        Renderer skinIntact, skinDamaged, skinRubble;
-        Material baseIntact, baseDamaged, baseRubble;
-
-        /// <summary>
-        /// 지금 단계의 그림을 상자에 입힌다 [2026-10-08].
-        ///
-        /// <b>단계용 그림이 없으면 아무것도 안 한다.</b> 다섯 종류 중 뽑힌 것부터 차례로
-        /// 켜지게 두는 편이 낫다 — 전부 모일 때까지 기다리면 아무것도 안 보인다
-        /// (<see cref="WallMaterials.Facade"/>와 같은 태도다).
-        ///
-        /// <b>그 단계의 메시에 입힌다</b> [고침 2026-10-08]. 전에는 렌더러를 처음 한 번만
-        /// 찾아 캐시했는데, 그때 켜져 있던 것은 늘 Intact였다. 그래서 파손·잔해 그림이
-        /// <b>꺼져 있는 Intact 메시</b>에 붙고, 화면에 보이는 메시는 민짜로 남았다 —
-        /// 실측에서 Damaged 상태의 보이는 메시가 <c>M_TEMP_Steel</c>이었다.
-        /// 종당 세 장씩 뽑아 둔 단계 그림이 온전 단계 말고는 한 번도 안 보이고 있었다.
-        /// </summary>
-        void ApplySkin(State next)
-        {
-            if (Data == null) return;
-
-            Texture2D tex = Data.FacadeForState(next);
-            if (tex == null) return;
-
-            Renderer r = next == State.Damaged ? skinDamaged
-                       : next == State.Rubble ? skinRubble : skinIntact;
-            Material baseMat = next == State.Damaged ? baseDamaged
-                             : next == State.Rubble ? baseRubble : baseIntact;
-
-            // 그 단계의 메시가 없으면 온전 쪽으로 물러선다 — 아무것도 안 하는 것보다 낫다.
-            if (r == null) { r = skinIntact; baseMat = baseIntact; }
-            if (r == null) return;
-
-            Material mat = StageSkin.For(tex, baseMat);
-            if (mat != null && r.sharedMaterial != mat) r.sharedMaterial = mat;
-        }
 
         void SetState(State next)
         {

@@ -37,8 +37,13 @@ namespace Demo.EditorTools
 
         void OnPreprocessTexture()
         {
-            if (assetPath.Replace('\\', '/').IndexOf(Folder, System.StringComparison.Ordinal) < 0)
-                return;
+            string path = assetPath.Replace('\\', '/');
+            if (path.IndexOf(Folder, System.StringComparison.Ordinal) < 0) return;
+
+            // 구운 아틀라스는 건드리지 않는다 [2026-10-12]. 한 장에 네 면이 들어 있어
+            // 필요한 크기가 종류마다 다르고, 그 크기는 카메라에서 끌어낸다 —
+            // 여기서 1024로 묶으면 큰 건물의 벽이 2.7배로 늘어난다 (FacadeAtlas 참조).
+            if (path.IndexOf("/Facades/Atlas/", System.StringComparison.Ordinal) >= 0) return;
 
             var imp = (TextureImporter)assetImporter;
 
