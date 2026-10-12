@@ -42,6 +42,17 @@ namespace Demo.Utils
         /// <summary>실측용. 지금 흐르는 곡.</summary>
         public AudioClip Playing => wanted;
 
+        /// <summary>
+        /// 음악 음량 0~1 [2026-10-12]. 옵션 화면의 슬라이더가 민다.
+        /// 효과음과 달리 <b>즉시 따라간다</b> — <see cref="Fade"/>가 매 프레임 이 값을 목표로
+        /// 삼으므로, 슬라이더를 끌면 그 자리에서 소리가 같이 움직인다.
+        /// </summary>
+        public float Volume
+        {
+            get => volume;
+            set => volume = Mathf.Clamp01(value);
+        }
+
         void Awake()
         {
             s_current = this;

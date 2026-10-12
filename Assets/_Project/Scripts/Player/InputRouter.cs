@@ -150,7 +150,20 @@ namespace Demo.Player
         /// <summary>가상 조이스틱이 미는 이동 값. null이면 실제 입력을 쓴다.</summary>
         public Vector2? MoveOverride { get; set; }
 
-        bool runHeldLast;
+        /// <summary>
+        /// 가상 버튼이 누르고 있는 상태 [2026-10-12]. <see cref="RunOverride"/>와 같은 꼴이다.
+        ///
+        /// <b>이게 없으면 모바일에서 건물을 못 부순다.</b> 키보드에는 E와 Q가 있는데 터치에는
+        /// 이동과 행동 둘뿐이라, 폰에서는 파괴 화면에 들어갈 방법이 아예 없었다 —
+        /// 게임의 절반이 잠긴다. 누르는 <b>순간</b>만 쓰는 입력이라 눌림 상태를 받아
+        /// <see cref="Update"/>에서 가장자리를 만든다.
+        /// </summary>
+        public bool? InteractOverride { get; set; }
+
+        /// <inheritdoc cref="InteractOverride"/>
+        public bool? DropOverride { get; set; }
+
+        bool runHeldLast, interactHeldLast, dropHeldLast;
 
         void Update()
         {
@@ -178,15 +191,23 @@ namespace Demo.Player
                 StrikeRightArm = DecideStrikeSide();
             }
 
-            DropPressedThisFrame = dropAction.WasPressedThisFrame();
-            InteractPressedThisFrame = interactAction.WasPressedThisFrame();
+            DropPressedThisFrame = Edge(DropOverride, ref dropHeldLast, dropAction);
+            InteractPressedThisFrame = Edge(InteractOverride, ref interactHeldLast, interactAction);
 
             // 달리기도 같은 토글 방식. 가상 버튼이 있으면 그 쪽의 누르는 순간을 쓴다.
-            bool runPressed = RunOverride.HasValue
-                ? (RunOverride.Value && !runHeldLast)
-                : runAction.WasPressedThisFrame();
-            runHeldLast = RunOverride ?? false;
-            if (runPressed) RunActive = !RunActive;
+            if (Edge(RunOverride, ref runHeldLast, runAction)) RunActive = !RunActive;
+        }
+
+        /// <summary>
+        /// 눌린 <b>순간</b>을 만든다. 가상 버튼이 값을 밀고 있으면 그쪽의 가장자리를,
+        /// 아니면 실제 입력의 것을 쓴다. 누름 상태만 오가는 터치 UI와 가장자리를 직접 주는
+        /// Input System을 같은 모양으로 맞추는 자리다.
+        /// </summary>
+        static bool Edge(bool? over, ref bool heldLast, InputAction real)
+        {
+            bool pressed = over.HasValue ? (over.Value && !heldLast) : real.WasPressedThisFrame();
+            heldLast = over ?? false;
+            return pressed;
         }
 
         /// <summary>

@@ -36,6 +36,19 @@ namespace Demo.Utils
         /// <summary>어디서든 읽는다. Bootstrap이 깨어나기 전에 부르면 null이다.</summary>
         public static GameAudio Current => s_current;
 
+        /// <summary>
+        /// 효과음 전체 음량 0~1 [2026-10-12]. 옵션 화면의 슬라이더가 민다.
+        ///
+        /// <b>이미 울리고 있는 소리는 안 바뀐다.</b> 음량은 재생할 때 한 번 정해지고,
+        /// 풀의 AudioSource를 나중에 건드리면 한 발짜리 소리의 중간에 크기가 변한다.
+        /// 슬라이더를 움직이는 동안 들리는 것이 바로 다음 발부터라 그게 자연스럽다.
+        /// </summary>
+        public float Master
+        {
+            get => master;
+            set => master = Mathf.Clamp01(value);
+        }
+
         /// <summary>실측·디버그용. 지난 프레임까지 울린 횟수.</summary>
         public int PlayedCount { get; private set; }
 

@@ -6,7 +6,7 @@ using UnityEngine.InputSystem.Controls;
 namespace Demo.UI
 {
     /// <summary>
-    /// 모바일 터치 입력 — 왼쪽 절반 가상 조이스틱 + 오른쪽 버튼 (GAME_DESIGN §3).
+    /// 모바일 터치 입력 — 왼쪽 절반 가상 조이스틱 + 오른쪽 버튼들 (GAME_DESIGN §3).
     ///
     /// <b>Canvas도 EventSystem도 쓰지 않는다.</b> 화면 영역으로 직접 나누고 터치를 읽는다.
     /// uGUI로 만들면 프리팹과 씬 와이어링이 늘어나는데 그건 사람이 손으로 하는 작업이고
@@ -15,13 +15,13 @@ namespace Demo.UI
     /// 조이스틱은 <b>고정이 아니라 떠 있다</b> — 왼쪽 절반 어디를 눌러도 그 자리가 중심이 된다.
     /// 모바일에서 고정 스틱은 손가락이 위치를 먼저 찾아야 해서 반응이 느려진다.
     ///
-    /// 조준이 없으므로 이 둘이 입력의 전부다.
+    /// <b>버튼이 넷이다</b> [2026-10-12]. 전에는 행동 하나뿐이어서 폰에서는 E(부수기)·Q(놓기)·
+    /// Shift(달리기)를 쓸 방법이 없었다 — 건물을 부술 수가 없으니 게임의 절반이 잠겼다.
+    /// 배치는 <see cref="TouchPad"/>가 갖고, 늘리는 비용은 한 줄이다.
     ///
-    /// <b>[지시 2026-09-22] 지금은 PC 우선이다.</b> 이 컴포넌트는 터치스크린이 실제로 있을 때만
-    /// 스스로 켜진다. 모바일로 넘어갈 때 별도 작업 없이 그대로 동작하고, PC에서 손으로
-    /// 확인하고 싶으면 <see cref="mouseActsAsTouch"/>만 켜면 된다.
+    /// PC에서는 스스로 꺼진다. 손으로 확인하려면 <see cref="mouseActsAsTouch"/>만 켠다.
     /// </summary>
-    public sealed class TouchControls : MonoBehaviour
+    public sealed partial class TouchControls : MonoBehaviour
     {
         [SerializeField] InputRouter router;
 
@@ -31,34 +31,37 @@ namespace Demo.UI
         [SerializeField, Range(0.04f, 0.30f), Tooltip("조이스틱을 최대로 기울이는 거리. 화면 높이 대비")]
         float stickRadiusFraction = 0.12f;
 
-        [SerializeField, Range(0.04f, 0.30f), Tooltip("행동 버튼 반경. 화면 높이 대비")]
-        float buttonRadiusFraction = 0.11f;
-
-        [SerializeField, Tooltip("행동 버튼 중심. 화면 크기 대비 (0~1)")]
-        Vector2 buttonCenterFraction = new Vector2(0.86f, 0.22f);
+        [SerializeField, Tooltip("버튼 배치. 비면 TouchPad.Default()를 쓴다")]
+        TouchPad[] pads = new TouchPad[0];
 
         [SerializeField, Tooltip("마우스를 손가락처럼 쓴다. PC 우선인 동안은 꺼 둔다 — " +
                                  "켜면 클릭이 조이스틱이 되어 키보드 조작과 섞인다")]
         bool mouseActsAsTouch = false;
 
-        [SerializeField, Tooltip("터치가 전혀 없으면 키보드가 그대로 동작하게 둔다")]
+        [SerializeField, Tooltip("아무도 안 누르고 있어도 버튼을 보여 준다")]
         bool showWhenNoTouch = true;
 
         const int None = -1;
+
         int stickPointer = None;
-        int buttonPointer = None;
         Vector2 stickOrigin, stickCurrent;
+
+        /// <summary>버튼마다 그것을 쥐고 있는 손가락. 없으면 <see cref="None"/>.</summary>
+        int[] held;
 
         Texture2D disc;
 
         float StickRadius => Screen.height * stickRadiusFraction;
-        float ButtonRadius => Screen.height * buttonRadiusFraction;
-        Vector2 ButtonCenter => new Vector2(Screen.width * buttonCenterFraction.x,
-                                            Screen.height * buttonCenterFraction.y);
+
+        /// <summary>실측·점검용. 지금 쓰는 배치.</summary>
+        public TouchPad[] Pads => pads;
 
         void Awake()
         {
             if (router == null) router = FindFirstObjectByType<InputRouter>();
+            if (pads == null || pads.Length == 0) pads = TouchPad.Default();
+            held = new int[pads.Length];
+            for (int i = 0; i < held.Length; i++) held[i] = None;
 
             // PC에서는 조용히 빠진다. 켜져 있으면 OnGUI가 버튼을 그려서 시야를 가린다.
             if (autoDisableWithoutTouchscreen && Touchscreen.current == null && !mouseActsAsTouch)
@@ -75,37 +78,81 @@ namespace Demo.UI
             if (disc != null) Destroy(disc);
         }
 
+        /// <summary>
+        /// 눌려 있지 않은 버튼은 override를 <b>비워 둔다</b> (null). false로 두면 키보드가
+        /// 영영 안 먹는다 — override가 값을 갖고 있는 동안은 실제 입력을 안 보기 때문이다.
+        /// </summary>
         void Update()
         {
-            if (router == null) return;
+            if (router == null || held == null) return;
 
-            bool sawStick = false, sawButton = false;
+            // 타이틀/옵션이 떠 있으면 손을 뗀다. 안 그러면 시작 버튼을 누르려다
+            // 그 밑의 케이블 버튼까지 같이 눌린다.
+            if (TitleScreen.Blocking) { Clear(); return; }
+
+            bool sawStick = false;
+            var seen = new bool[pads.Length];
 
             var ts = Touchscreen.current;
             if (ts != null)
-            {
                 foreach (TouchControl t in ts.touches)
                 {
                     if (!t.press.isPressed) continue;
-                    Route(t.touchId.ReadValue(), t.position.ReadValue(), ref sawStick, ref sawButton);
+                    Route(t.touchId.ReadValue(), t.position.ReadValue(), ref sawStick, seen);
                 }
-            }
 
             if (mouseActsAsTouch && Mouse.current != null && Mouse.current.leftButton.isPressed)
-                Route(int.MinValue, Mouse.current.position.ReadValue(), ref sawStick, ref sawButton);
+                Route(int.MinValue, Mouse.current.position.ReadValue(), ref sawStick, seen);
 
             if (!sawStick) { stickPointer = None; router.MoveOverride = null; }
-            if (!sawButton) { buttonPointer = None; router.ActionOverride = null; }
+
+            for (int i = 0; i < pads.Length; i++)
+            {
+                if (!seen[i]) held[i] = None;
+                Push(pads[i].Id, seen[i] ? (bool?)true : null);
+            }
         }
 
-        /// <summary>포인터 하나를 조이스틱이나 버튼에 배정한다. 한 번 배정되면 뗄 때까지 유지된다.</summary>
-        void Route(int id, Vector2 pos, ref bool sawStick, ref bool sawButton)
+        /// <summary>쥐고 있던 것을 전부 놓고 실제 입력에 자리를 돌려준다.</summary>
+        void Clear()
         {
-            if (id == buttonPointer || (buttonPointer == None && IsOnButton(pos)))
+            stickPointer = None;
+            router.MoveOverride = null;
+            for (int i = 0; i < pads.Length; i++)
             {
-                buttonPointer = id;
-                sawButton = true;
-                router.ActionOverride = true;
+                held[i] = None;
+                Push(pads[i].Id, null);
+            }
+        }
+
+        /// <summary>그 버튼의 눌림을 라우터에 민다. null이면 실제 입력에 자리를 돌려준다.</summary>
+        void Push(TouchButton id, bool? state)
+        {
+            switch (id)
+            {
+                case TouchButton.Action: router.ActionOverride = state; break;
+                case TouchButton.Interact: router.InteractOverride = state; break;
+                case TouchButton.Drop: router.DropOverride = state; break;
+                case TouchButton.Run: router.RunOverride = state; break;
+            }
+        }
+
+        /// <summary>
+        /// 포인터 하나를 버튼이나 조이스틱에 배정한다. <b>한 번 배정되면 뗄 때까지 유지된다</b> —
+        /// 안 그러면 누른 채 손가락을 끌 때 버튼 사이를 넘나들며 연타로 들어간다.
+        /// </summary>
+        void Route(int id, Vector2 pos, ref bool sawStick, bool[] seen)
+        {
+            // 이미 어떤 버튼이 쥐고 있는 손가락인가
+            for (int i = 0; i < pads.Length; i++)
+                if (held[i] == id) { seen[i] = true; return; }
+
+            // 새 손가락이 버튼 위에 닿았는가. 버튼이 조이스틱보다 먼저다.
+            for (int i = 0; i < pads.Length; i++)
+            {
+                if (held[i] != None || !pads[i].Contains(pos)) continue;
+                held[i] = id;
+                seen[i] = true;
                 return;
             }
 
@@ -125,70 +172,6 @@ namespace Demo.UI
                 sawStick = true;
                 router.MoveOverride = Vector2.zero;
             }
-        }
-
-        bool IsOnButton(Vector2 pos) =>
-            (pos - ButtonCenter).sqrMagnitude <= ButtonRadius * ButtonRadius;
-
-        // ── 임시 시각화 ──────────────────────────────────────────────────────────
-        // OnGUI로 그린다. D10에 제대로 된 UI로 교체할 자리이며, 지금은 "어디를 눌러야 하는가"가
-        // 보이기만 하면 된다.
-
-        void OnGUI()
-        {
-            if (Event.current.type != EventType.Repaint) return;
-
-            bool touching = stickPointer != None || buttonPointer != None;
-            if (!touching && !showWhenNoTouch) return;
-
-            // 행동 버튼
-            Vector2 bc = ToGui(ButtonCenter);
-            DrawDisc(bc, ButtonRadius, buttonPointer != None
-                ? new Color(1f, 0.72f, 0.2f, 0.55f) : new Color(1f, 1f, 1f, 0.16f));
-
-            // 조이스틱 — 누르고 있을 때만 보인다
-            if (stickPointer != None)
-            {
-                Vector2 o = ToGui(stickOrigin);
-                DrawDisc(o, StickRadius, new Color(1f, 1f, 1f, 0.12f));
-
-                Vector2 delta = stickCurrent - stickOrigin;
-                if (delta.magnitude > StickRadius) delta = delta.normalized * StickRadius;
-                DrawDisc(ToGui(stickOrigin + delta), StickRadius * 0.42f,
-                         new Color(1f, 1f, 1f, 0.45f));
-            }
-        }
-
-        /// <summary>입력 좌표는 왼쪽 아래 기준, GUI는 왼쪽 위 기준이다.</summary>
-        static Vector2 ToGui(Vector2 screen) => new Vector2(screen.x, Screen.height - screen.y);
-
-        void DrawDisc(Vector2 center, float radius, Color color)
-        {
-            Color prev = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f), disc);
-            GUI.color = prev;
-        }
-
-        static Texture2D MakeDisc(int size)
-        {
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            float r = size * 0.5f;
-            var px = new Color32[size * size];
-
-            for (int y = 0; y < size; y++)
-                for (int x = 0; x < size; x++)
-                {
-                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
-                    // 가장자리 1.5px를 부드럽게 깎아 계단을 없앤다
-                    float edge = Mathf.Clamp01(1f - Mathf.Max(0f, d - (r - 1.5f)) / 1.5f);
-                    px[y * size + x] = new Color32(255, 255, 255, (byte)(edge * 255f));
-                }
-
-            tex.SetPixels32(px);
-            tex.Apply();
-            tex.hideFlags = HideFlags.HideAndDontSave;
-            return tex;
         }
     }
 }
