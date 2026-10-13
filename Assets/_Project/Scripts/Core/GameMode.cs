@@ -87,7 +87,18 @@ namespace Demo.Core
             GameLoop loop = GameLoop.Instance;
             Vector3 eye = loop != null ? loop.PlayerPosition : target.transform.position + Vector3.back;
             Vector3 size = target.Data != null ? target.Data.colliderSize : Vector3.one;
-            TargetFace = Destruction.StructureFace.Facing(target.transform, eye, size);
+
+            // <b>화면에 보이던 벽 중에서 고른다</b> [고침 2026-10-12].
+            //
+            // 필드 카메라는 수평각이 고정이라 한 건물에서 화면에 나오는 벽이 늘 두 면뿐이다.
+            // 선 자리만 보고 고르면 <b>플레이어가 한 번도 본 적 없는 벽</b>이 나온다 —
+            // 실측으로 24방향 중 51%가 그랬고, 정면은 구역 39채 전부에서 한 번도 안 보였다.
+            // "정면에서 눌렀는데 측면이 나온다"의 정체다 (StructureFace.Facing 참조).
+            //
+            // <b>카메라의 트랜스폼이 아니라 FieldYaw를 읽는다.</b> 들어가는 순간의 트랜스폼은
+            // 이전 파괴 화면에서 돌아오던 중일 수 있어서, 그걸 기준으로 삼으면 답이 흔들린다.
+            TargetFace = Destruction.StructureFace.Facing(
+                target.transform, eye, size, FieldLook());
 
             Set(Mode.Demolition);
             return true;
@@ -105,6 +116,16 @@ namespace Demo.Core
         {
             Target = null;
             Set(Mode.Ended);
+        }
+
+        FollowCamera view;
+
+        /// <summary>필드 카메라가 보는 수평 방향. 없으면 0 — 그때는 예전 규칙으로 돌아간다.</summary>
+        Vector3 FieldLook()
+        {
+            if (view == null) view = FindFirstObjectByType<FollowCamera>();
+            if (view == null) return Vector3.zero;
+            return Quaternion.Euler(0f, view.FieldYaw, 0f) * Vector3.forward;
         }
 
         void Set(Mode next)

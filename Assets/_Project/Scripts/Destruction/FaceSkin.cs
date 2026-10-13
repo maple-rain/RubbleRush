@@ -54,6 +54,23 @@ namespace Demo.Destruction
             return new Rect((f & 1) * 0.5f, (f >> 1) * 0.5f, 0.5f, 0.5f);
         }
 
+        /// <summary>
+        /// 토대(잔해 단계) 아틀라스의 칸. <b>두 쪽짜리다</b> [지시 2026-10-12] —
+        /// 왼쪽은 네 <b>옆면</b>이 쓰는 무너진 벽 입면, 오른쪽은 <b>윗면</b>이 쓰는 자갈이다.
+        ///
+        /// <b>왜 윗면을 따로 두는가.</b> 잔해 그림은 건물의 <b>정면도</b>라 위쪽 28~45%가
+        /// 밋밋한 하늘이다. 민짜 Cube에 그대로 깔면 그 하늘이 <b>윗면에 통째로</b> 얹히는데,
+        /// 카메라가 50도로 내려다보므로 윗면이 어느 벽보다 크게 보인다 —
+        /// 기획자가 "회색 육면체"라고 지적한 것이 그 하늘이다.
+        /// 입면은 벽에 서야 하고, 윗면에는 부서진 콘크리트가 와야 한다.
+        /// </summary>
+        public static Rect RubbleCell(int face, bool top)
+        {
+            if (top) return new Rect(0f, 0.5f, 0.5f, 0.5f);                 // 윗면 — 부서진 콘크리트
+            if (face == StructureFace.Front) return new Rect(0f, 0f, 0.5f, 0.5f);   // 문 있는 쪽
+            return new Rect(0.5f, 0f, 0.5f, 0.5f);                          // 문 없는 쪽
+        }
+
         /// <summary><paramref name="root"/> 아래 메시 전부를 네 면 UV로 바꾼다.</summary>
         public static void Apply(GameObject root)
         {
@@ -86,17 +103,113 @@ namespace Demo.Destruction
             copy.name = src.name + " (4면)";
             copy.hideFlags = HideFlags.HideAndDontSave;
 
+            // <b>UV를 접지 않고 다시 그린다</b> [고침 2026-10-12].
+            //
+            // 처음에는 원래 UV를 칸으로 옮기기만 했다. 그런데 유니티 기본 Cube는
+            // <b>-Z 면만 UV가 180도 돌아 있다</b> — 실측으로 u+가 (-1,0,0)이 아니라 (1,0,0)이고
+            // v+는 아래를 가리킨다. 그대로 옮기면 필드의 후면 벽에 그림이 거꾸로·좌우반전으로
+            // 붙고, 조각 판은 똑바로 붙는다. <b>같은 그림인데 다른 그림으로 보인다</b> —
+            // 후면은 39채 전부에서 늘 보이는 면이라 이것이 계속 걸렸다 [지적 2026-10-12].
+            //
+            // 그래서 꼭짓점 자리에서 직접 끌어낸다. 규약은 <b>조각 판과 같은 것</b>을 쓴다
+            // (WallFracture.Uv) — 둘이 같은 식을 봐야 다시는 어긋나지 않는다.
+            Vector3[] pos = src.vertices;
+            Bounds box = src.bounds;
+
             var folded = new Vector2[uv.Length];
             for (int i = 0; i < uv.Length; i++)
             {
-                Rect c = Cell(FaceOf(n[i]));
+                int f = FaceOf(n[i]);
+                Vector3 p = pos[i] - box.center;
+                Vector2 flat = Flat(p, box.extents, n[i], f);
+                Rect c = Cell(f);
                 folded[i] = new Vector2(
-                    c.x + EdgeInset + uv[i].x * (c.width - EdgeInset * 2f),
-                    c.y + EdgeInset + uv[i].y * (c.height - EdgeInset * 2f));
+                    c.x + EdgeInset + flat.x * (c.width - EdgeInset * 2f),
+                    c.y + EdgeInset + flat.y * (c.height - EdgeInset * 2f));
             }
             copy.uv = folded;
 
             s_cache[src] = copy;
+            return copy;
+        }
+
+        /// <summary>
+        /// 그 면 위에서의 자리 0~1. <b>조각 판과 같은 규약</b>이다 —
+        /// 바깥에서 봤을 때 u는 오른쪽, v는 위로 커진다.
+        /// 윗면·아랫면은 세로가 없으므로 x·z로 깐다 (지붕이 덮어 안 보인다).
+        /// </summary>
+        static Vector2 Flat(Vector3 p, Vector3 extents, Vector3 normal, int face)
+        {
+            if (Mathf.Abs(normal.y) > Mathf.Abs(normal.x) && Mathf.Abs(normal.y) > Mathf.Abs(normal.z))
+                return new Vector2(Half(p.x, extents.x), Half(p.z, extents.z));
+
+            Vector3 right = RightOf(face);
+            float halfWide = Mathf.Abs(Vector3.Dot(extents, right));
+            float u = halfWide > 1e-4f ? Vector3.Dot(p, right) / (halfWide * 2f) + 0.5f : 0.5f;
+            return new Vector2(u, Half(p.y, extents.y));
+        }
+
+        static float Half(float a, float e) => e > 1e-4f ? a / (e * 2f) + 0.5f : 0.5f;
+
+        /// <summary>
+        /// 그 면을 바깥에서 봤을 때 <b>오른쪽</b>이 건물 로컬에서 어느 쪽인가.
+        /// <c>FractureProxy</c>가 판을 세울 때 쓰는 식과 글자 그대로 같다.
+        /// </summary>
+        static Vector3 RightOf(int face)
+        {
+            Vector3 outward;
+            switch (((face % StructureFace.Count) + StructureFace.Count) % StructureFace.Count)
+            {
+                case StructureFace.Front: outward = Vector3.forward; break;
+                case StructureFace.Right: outward = Vector3.right;   break;
+                case StructureFace.Back:  outward = Vector3.back;    break;
+                default:                  outward = Vector3.left;    break;
+            }
+            return Quaternion.LookRotation(-outward, Vector3.up) * Vector3.right;
+        }
+
+        /// <summary>토대용. 옆면은 입면, 윗면·아랫면은 자갈 쪽 칸을 본다.</summary>
+        public static void ApplyRubble(GameObject root)
+        {
+            if (root == null) return;
+            foreach (MeshFilter mf in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                Mesh swapped = RubbleMapped(mf.sharedMesh);
+                if (swapped != null) mf.sharedMesh = swapped;
+            }
+        }
+
+        static readonly Dictionary<Mesh, Mesh> s_rubble = new Dictionary<Mesh, Mesh>();
+
+        static Mesh RubbleMapped(Mesh src)
+        {
+            if (src == null) return null;
+            if (s_rubble.TryGetValue(src, out Mesh found) && found != null) return found;
+            if (!src.isReadable) return null;
+
+            Vector3[] n = src.normals;
+            Vector3[] pos = src.vertices;
+            if (n == null || pos == null || n.Length != pos.Length || n.Length == 0) return null;
+
+            var copy = Object.Instantiate(src);
+            copy.name = src.name + " (토대)";
+            copy.hideFlags = HideFlags.HideAndDontSave;
+
+            Bounds box = src.bounds;
+            var uv = new Vector2[pos.Length];
+            for (int i = 0; i < pos.Length; i++)
+            {
+                bool top = Mathf.Abs(n[i].y) > Mathf.Abs(n[i].x) && Mathf.Abs(n[i].y) > Mathf.Abs(n[i].z);
+                Vector3 p = pos[i] - box.center;
+                Vector2 flat = Flat(p, box.extents, n[i], FaceOf(n[i]));
+                Rect c = RubbleCell(FaceOf(n[i]), top);
+                uv[i] = new Vector2(
+                    c.x + EdgeInset + flat.x * (c.width - EdgeInset * 2f),
+                    c.y + EdgeInset + flat.y * (c.height - EdgeInset * 2f));
+            }
+            copy.uv = uv;
+
+            s_rubble[src] = copy;
             return copy;
         }
 
@@ -114,6 +227,9 @@ namespace Demo.Destruction
             foreach (Mesh m in s_cache.Values)
                 if (m != null) Object.Destroy(m);
             s_cache.Clear();
+            foreach (Mesh m in s_rubble.Values)
+                if (m != null) Object.Destroy(m);
+            s_rubble.Clear();
         }
     }
 }

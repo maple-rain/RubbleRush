@@ -52,14 +52,80 @@ namespace Demo.Destruction
         {
             if (t == null) return Front;
 
+            float best = float.MinValue;
+            int pick = Front;
+            for (int f = 0; f < Count; f++)
+            {
+                float s = Score(t, from, size, f);
+                if (s > best) { best = s; pick = f; }
+            }
+            return pick;
+        }
+
+        /// <summary>
+        /// 그 사람이 선 쪽의 면 <b>중에서, 화면에 실제로 보이던 것</b> [고침 2026-10-12].
+        ///
+        /// <b>왜 카메라를 봐야 하는가.</b> 필드 카메라는 수평각이 고정이다
+        /// (<see cref="Core.FollowCamera.FieldYaw"/>). 그래서 건물 하나에서 화면에 나오는 벽은
+        /// <b>언제나 두 면뿐</b>이고, 나머지 두 면은 플레이어가 한 번도 본 적이 없다.
+        /// 실측(2026-10-12): 구역 39채가 전부 yaw 0 아니면 90이라
+        /// <b>정면은 단 한 채에서도 화면에 나오지 않는다.</b>
+        ///
+        /// 서 있는 자리만 보고 면을 고르면, 24방향 중 <b>51%</b>에서 "본 적 없는 벽"이 나왔다.
+        /// 기획자가 세 번 적은 "정면에서 눌렀는데 측면이 나온다"가 이것이다 —
+        /// 돌아간 것이 아니라, <b>보고 있던 벽이 아닌 벽</b>을 보여 준 것이다.
+        ///
+        /// 그래서 후보를 <b>화면에 보이던 면</b>으로 먼저 거르고, 그 안에서 선 자리로 고른다.
+        /// 보이는 면이 둘이므로 "어느 쪽으로 돌아가 눌렀는가"는 그대로 살아 있다.
+        /// </summary>
+        /// <param name="viewDir">카메라가 보는 수평 방향. 길이는 상관없다</param>
+        public static int Facing(Transform t, Vector3 from, Vector3 size, Vector3 viewDir)
+        {
+            if (t == null) return Front;
+
+            viewDir.y = 0f;
+            if (viewDir.sqrMagnitude < 0.0001f) return Facing(t, from, size);
+            viewDir.Normalize();
+
+            float best = float.MinValue;
+            int pick = -1;
+            for (int f = 0; f < Count; f++)
+            {
+                Vector3 n = Normal(t, f);
+                n.y = 0f;
+                // 바깥쪽이 카메라를 마주 보는 면만 화면에 나온다.
+                if (Vector3.Dot(n.normalized, -viewDir) <= 0.01f) continue;
+
+                float s = Score(t, from, size, f);
+                if (s > best) { best = s; pick = f; }
+            }
+
+            // 보이는 면이 하나도 없는 일은 기하학적으로 없지만, 없으면 예전 규칙으로 돌아간다.
+            return pick >= 0 ? pick : Facing(t, from, size);
+        }
+
+        /// <summary>
+        /// 그 면 쪽에 얼마나 치우쳐 서 있는가. 클수록 그 벽 앞이다.
+        ///
+        /// <b>반드시 반너비로 정규화해야 한다.</b> <c>|x| &gt; |z|</c>로 그냥 비교하면
+        /// 납작한 건물에서 무너진다 — 5.5 × 1.0짜리 건물은 정면에서 옆으로 조금만 비켜도
+        /// x가 z보다 커져서 "측면"이 되고, 조각 판이 5.5m가 아니라 <b>1.0m</b> 폭으로 선다.
+        /// 어느 면인가는 거리가 아니라 <b>제 반너비 대비 얼마나 벗어났는가</b>가 정한다.
+        /// </summary>
+        static float Score(Transform t, Vector3 from, Vector3 size, int face)
+        {
             // 방향으로 변환한다 — 위치로 하면 건물 스케일이 답을 비튼다.
             Vector3 d = t.InverseTransformDirection(from - t.position);
+            float x = d.x / Mathf.Max(0.01f, size.x);
+            float z = d.z / Mathf.Max(0.01f, size.z);
 
-            float ax = Mathf.Abs(d.x) / Mathf.Max(0.01f, size.x);
-            float az = Mathf.Abs(d.z) / Mathf.Max(0.01f, size.z);
-
-            if (az >= ax) return d.z >= 0f ? Front : Back;
-            return d.x >= 0f ? Right : Left;
+            switch (Wrap(face))
+            {
+                case Front: return z;
+                case Right: return x;
+                case Back:  return -z;
+                default:    return -x;
+            }
         }
 
         /// <summary>그 면의 바깥쪽 법선(월드). 카메라가 설 방향이자 조각 판이 볼 방향이다.</summary>
