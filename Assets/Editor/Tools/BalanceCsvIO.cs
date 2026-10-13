@@ -140,6 +140,9 @@ namespace Demo.EditorTools
             "# 경험치와 구멍 성장. 위에서부터 0단계, 1단계 … 순서다.",
             "# radius: 이 단계의 구멍 반경(m). 이보다 작은 잔해만 들어간다.",
             "#         앞 단계보다 반드시 커야 한다 — 구멍은 줄어들지 않는다.",
+            "# cableLength: 그 단계에서 쓸 수 있는 케이블 길이(m). 구멍과 같은 사다리다 —",
+            "#              단계가 오르면 삼킬 수 있는 크기도 감쌀 수 있는 덩어리도 같이 커진다.",
+            "#              0이면 cableMaxLength로 물러선다.",
             "# xpToNext: 다음 단계까지 필요한 누적 경험치. 마지막 단계는 0.",
             "# xpPerDebrisUnit: 잔해 1단위가 주는 경험치. 전역값이라 첫 줄만 읽는다.",
         };
@@ -221,11 +224,12 @@ namespace Demo.EditorTools
             var sb = new StringBuilder();
             foreach (string h in HoleHead) sb.AppendLine(h);
             foreach (string n in KeepNotes(PathOf(HoleCsv), HoleHead)) sb.AppendLine(n);
-            sb.AppendLine(Csv.Row("level", "radius", "xpToNext", "xpPerDebrisUnit"));
+            sb.AppendLine(Csv.Row("level", "radius", "cableLength", "xpToNext", "xpPerDebrisUnit"));
 
             var levels = cfg.holeLevels ?? new GameConfig.HoleLevel[0];
             for (int i = 0; i < levels.Length; i++)
-                sb.AppendLine(Csv.Row(Csv.I(i), Csv.F(levels[i].radius), Csv.I(levels[i].xpToNext),
+                sb.AppendLine(Csv.Row(Csv.I(i), Csv.F(levels[i].radius), Csv.F(levels[i].cableLength),
+                                      Csv.I(levels[i].xpToNext),
                                       i == 0 ? Csv.I(cfg.xpPerDebrisUnit) : ""));
 
             File.WriteAllText(PathOf(HoleCsv), sb.ToString(), Csv.ExcelSafe);

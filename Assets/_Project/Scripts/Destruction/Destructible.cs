@@ -96,6 +96,14 @@ namespace Demo.Destruction
                 intactAtlassed = true;
             }
 
+            // 토대는 <b>옆면에 입면, 윗면에 자갈</b>을 쓴다 [지시 2026-10-12].
+            // 잔해 그림은 정면도라 위쪽 28~45%가 하늘인데, 민짜 Cube에 그대로 깔면
+            // 그 하늘이 윗면에 통째로 얹힌다 — 50도로 내려다보는 화면에서 제일 큰 면이다.
+            if (label == "Rubble" && Data.facadeRubbleAtlas != null)
+            {
+                FaceSkin.ApplyRubble(go);
+            }
+
             // 단계마다 제 렌더러를 기억해 둔다. 그림을 입힐 때 <b>보이는 쪽</b>에 입혀야 한다
             // (규칙 5 — 찾는 일은 여기서 한 번만).
             var r = go.GetComponentInChildren<Renderer>(true);
@@ -179,6 +187,9 @@ namespace Demo.Destruction
         const float RubbleShrinkX = 0.90f;
         const float RubbleShrinkZ = 1.00f;
         const float RubbleHeight = 0.40f;
+
+        /// <summary>토대의 높이(m). 잔해를 그 위에 올려놓을 때 바깥에서 읽는다.</summary>
+        public static float FoundationHeight => RubbleHeight;
 
         /// <summary>토대의 바닥 발자국(월드 중심·반너비). 케이블 차단 판정이 읽는다 [11번 CableOnly].</summary>
         public void FoundationFootprint(out Vector3 center, out float halfX, out float halfZ)

@@ -141,6 +141,25 @@ namespace Demo.Hazard
         public static int FoundationCount => s_foundations.Count;
 
         /// <summary>
+        /// 그 자리(XZ)가 어느 토대 위인가 [지시 2026-10-12].
+        /// <see cref="Destruction.DebrisSpawner"/>가 잔해를 <b>토대 위에</b> 올려놓을 때 쓴다.
+        ///
+        /// 토대는 높이가 전부 같으므로(<c>Destructible.RubbleHeight</c>) 어느 것인지는
+        /// 알 필요가 없다 — 위에 있는가만 보면 된다.
+        /// </summary>
+        public static bool OnFoundation(Vector3 world)
+        {
+            for (int i = 0; i < s_foundations.Count; i++)
+            {
+                Box b = s_foundations[i];
+                float x = (world.x - b.cx) * b.cos - (world.z - b.cz) * b.sin;
+                float z = (world.x - b.cx) * b.sin + (world.z - b.cz) * b.cos;
+                if (Mathf.Abs(x) <= b.hx && Mathf.Abs(z) <= b.hz) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// 두 점을 잇는 선분이 토대를 가로지르는가 [11번 CableOnly].
         ///
         /// 케이블 궤적은 점 간격 0.25m짜리 짧은 선분의 연속이라, 격자를 쓸 만큼 길지 않다.

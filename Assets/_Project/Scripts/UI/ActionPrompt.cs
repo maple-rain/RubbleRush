@@ -37,7 +37,7 @@ namespace Demo.UI
         float knobFraction = 0.055f;
 
         [SerializeField, Tooltip("대상의 어느 높이에 띄울지. 건물 높이 대비 (1이면 꼭대기)")]
-        float anchorHeight = 0.75f;
+        float anchorHeight = 0.525f;
 
         [SerializeField, Tooltip("터치가 없으면 키 이름을 보여 준다")]
         bool showKeysOnDesktop = true;

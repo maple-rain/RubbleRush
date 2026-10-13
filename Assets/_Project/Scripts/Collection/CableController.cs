@@ -21,6 +21,9 @@ namespace Demo.Collection
 
         [SerializeField] CargoTow cargo;
 
+        [SerializeField, Tooltip("고리를 닫는 순간 케이블 토글을 끌 곳. 비면 Awake에서 찾는다")]
+        Player.InputRouter input;
+
         readonly List<Vector2> points = new List<Vector2>(256);
         readonly List<Vector2> polygon = new List<Vector2>(256);
         readonly List<Debris> captured = new List<Debris>(64);
@@ -45,6 +48,8 @@ namespace Demo.Collection
             line.useWorldSpace = true;
             line.positionCount = 0;
             if (cargo == null) cargo = GetComponent<CargoTow>();
+            if (input == null) input = GetComponent<Player.InputRouter>();
+            if (input == null) input = FindFirstObjectByType<Player.InputRouter>();
         }
 
         /// <summary>
@@ -89,7 +94,7 @@ namespace Demo.Collection
             }
 
             Add(here);
-            TrimToMaxLength(cfg.cableMaxLength);
+            TrimToMaxLength(MaxLength(cfg));
 
             if (LoopDetector.TryFindClosure(points, out int start, out Vector2 hit))
                 CloseLoop(cfg, start, hit);
@@ -110,6 +115,31 @@ namespace Demo.Collection
                 trailLength -= Vector2.Distance(points[0], points[1]);
                 points.RemoveAt(0);
             }
+        }
+
+        /// <summary>
+        /// 지금 단계에서 쓸 수 있는 궤적 길이 [지시 2026-10-12].
+        ///
+        /// <b>구멍과 같은 사다리다.</b> 단계가 오르면 삼킬 수 있는 크기도, 감쌀 수 있는
+        /// 덩어리도 같이 커진다 — 고리를 닫으려면 둘레(2pi x 반지름)만큼 그려야 하므로
+        /// 흩어짐이 넓은 종류는 긴 케이블이 있어야 한 고리에 들어온다.
+        ///
+        /// 전에는 <see cref="GameConfig.cableMaxLength"/> 하나로 고정이었다. 그래서
+        /// <c>t5_solid</c>는 흩어짐 8.0m인데 38.5m로는 반지름 6.13m까지밖에 못 감싸
+        /// <b>처음부터 끝까지 2~3번 쪼개야</b> 했다 — 성장이 없으니 나중에도 그대로였다.
+        ///
+        /// 단계별 값이 비어 있으면 예전 값으로 물러선다.
+        /// </summary>
+        float MaxLength(GameConfig cfg)
+        {
+            Hole hole = Core.GameLoop.Instance != null ? Core.GameLoop.Instance.ActiveHole : null;
+            if (hole != null && cfg.holeLevels != null && cfg.holeLevels.Length > 0)
+            {
+                int l = Mathf.Clamp(hole.Level, 0, cfg.holeLevels.Length - 1);
+                float v = cfg.holeLevels[l].cableLength;
+                if (v > 0f) return v;
+            }
+            return cfg.cableMaxLength;
         }
 
         void CloseLoop(GameConfig cfg, int start, Vector2 hit)
@@ -140,6 +170,15 @@ namespace Demo.Collection
             // 플레이어는 화면이 아니라 손끝을 보고 있다. 소리로 갈라 준다.
             Vector3 at = new Vector3(hit.x, transform.position.y, hit.y);
             Utils.GameAudio.Play(captured.Count > 0 ? Data.Sfx.Capture : Data.Sfx.CableMiss, at);
+
+            // <b>고리를 닫으면 케이블이 꺼진다</b> [지시 2026-10-12].
+            //
+            // 토글이라 전에는 닫은 뒤에도 켜진 채였고, 다음 걸음부터 <b>새 궤적이 바로
+            // 그려지기 시작했다</b> — 거두자마자 의도하지 않은 두 번째 고리가 시작되는 셈이다.
+            // 한 고리가 한 동작으로 끝나야 "둘러싸서 거뒀다"가 한 박자로 읽힌다.
+            // 바늘 모양으로 걸러진 경우에는 위에서 이미 돌아갔으므로 여기 안 온다 —
+            // 그린 적이 없는 것으로 치는 쪽이 맞다.
+            if (input != null) input.ClearAction();
 
             // 고리는 소모된다. 이어서 또 둘러싸면 CargoTow에서 합쳐진다.
             Clear();

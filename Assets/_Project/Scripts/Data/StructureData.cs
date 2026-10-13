@@ -49,6 +49,15 @@ namespace Demo.Data
                  "상자도 RubbleShrink로 납작해지므로 그림의 아랫부분만 보인다")]
         public Texture2D facadeRubble;
 
+        [Tooltip("토대용 두 쪽짜리. 왼쪽은 옆면이 쓸 무너진 벽, 오른쪽은 윗면이 쓸 자갈이다. "
+                 + "Demo/28이 채운다. 비면 예전처럼 잔해 정면도 한 장이 윗면까지 깔린다")]
+        public Texture2D facadeRubbleAtlas;
+
+        [Tooltip("문 없는 잔해 측면. 우측·후면·좌측이 쓴다. "
+                 + "카메라가 고정이라 한 건물에서 보이는 면은 둘뿐이고, 그 둘은 "
+                 + "문 있는 쪽과 없는 쪽뿐이다 [지시 2026-10-12]")]
+        public Texture2D facadeRubbleSide;
+
         [Tooltip("지붕(윗면). 비면 지붕을 안 덮고 벽 그림이 윗면까지 간다.\n" +
                  "카메라가 50도로 내려다보므로 윗면이 어느 벽보다 크게 보인다 — " +
                  "정면도가 거기 붙으면 건물이 납작해 보인다 (RoofCap 참조).\n" +
@@ -70,7 +79,7 @@ namespace Demo.Data
             switch (state)
             {
                 case Destruction.Destructible.State.Damaged: return facadeDamaged != null ? facadeDamaged : facadeFront;
-                case Destruction.Destructible.State.Rubble:  return facadeRubble != null ? facadeRubble : facadeDamaged != null ? facadeDamaged : facadeFront;
+                case Destruction.Destructible.State.Rubble:  return facadeRubbleAtlas != null ? facadeRubbleAtlas : facadeRubble != null ? facadeRubble : facadeDamaged != null ? facadeDamaged : facadeFront;
                 default: return facadeAtlas != null ? facadeAtlas : facadeFront;
             }
         }

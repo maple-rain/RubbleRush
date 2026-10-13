@@ -76,7 +76,7 @@ namespace Demo.UI
 
         Texture2D px, disc, ring;
 
-        GUIStyle hand, head;
+        GUIStyle hand;
 
         GameModeController mode;
 
@@ -254,11 +254,8 @@ namespace Demo.UI
             Hand(new Vector2(w * hintInset, y), r * (flashRight ? 1f : pop), hintLabel, blink);
             Hand(new Vector2(w * (1f - hintInset), y), r * (flashRight ? pop : 1f), hintLabel, blink);
 
-            // 처음 들어왔을 때만 한 줄. 알고 나면 사라진다.
-            if (a < 0.75f) return;
-            head.fontSize = Mathf.Max(12, Mathf.RoundToInt(h * 0.035f));
-            Shadow(new Rect(0f, h * 0.20f, w, h * 0.07f), "화면 좌우를 두드려 부순다", head,
-                   new Color(1f, 1f, 1f, 0.9f * a));
+            // <b>글로 쓴 안내는 뺐다</b> [지시 2026-10-12].
+            // 양쪽의 TOUCH! 두 개가 같은 말을 이미 하고 있어서 한 번 더 적을 자리가 아니었다.
         }
 
         /// <summary>
@@ -343,7 +340,6 @@ namespace Demo.UI
                 fontStyle = FontStyle.Bold,
                 wordWrap = false,
             };
-            head = new GUIStyle(hand) { fontStyle = FontStyle.Normal };
         }
 
         /// <summary>글자 뒤에 그림자를 깐다. 벽이 밝으면 흰 글자만으로는 안 읽힌다.</summary>

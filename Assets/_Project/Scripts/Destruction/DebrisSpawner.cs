@@ -17,8 +17,10 @@ namespace Demo.Destruction
         [SerializeField, Tooltip("잔해로 쓸 프리팹. Debris 컴포넌트가 붙어 있어야 한다")]
         GameObject debrisPrefab;
 
-        [SerializeField, Tooltip("잔해가 놓이는 높이(m). 바닥에 반쯤 박히지 않게 띄운다")]
-        float groundOffset = 0.25f;
+        [SerializeField, Range(0f, 0.5f), Tooltip(
+            "조각이 바닥면에 얼마나 잠기는가. 한 변 대비 비율. " +
+            "0이면 정확히 얹힌다. 박혀 보여야 하는 것은 조각이 아니라 토대였다 [정정 2026-10-12]")]
+        float sinkShare = 0f;
 
         public GameObject DebrisPrefab { get => debrisPrefab; set => debrisPrefab = value; }
 
@@ -48,6 +50,7 @@ namespace Demo.Destruction
                 }
 
                 Vector3 pos = FindFreeSpot(center, data);
+                pos.y = RestHeight(pos, data);
                 Quaternion rot = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
 
                 GameObject go = PoolManager.Instance.Get(debrisPrefab, pos, rot);
@@ -59,6 +62,30 @@ namespace Demo.Destruction
                 if (d != null) d.Init(data.debrisSizeClass, data.debrisRadius);
                 else Debug.LogError("[DebrisSpawner] 잔해 프리팹에 Debris 컴포넌트가 없다.", debrisPrefab);
             }
+        }
+
+        /// <summary>
+        /// 그 자리에서 조각의 <b>중심이 놓일 높이</b> [지시 2026-10-12].
+        ///
+        /// <b>예전에는 0.25m 고정이었다.</b> 그런데 조각 한 변은 종류마다 0.16m에서 1.17m까지
+        /// <b>7.3배</b> 차이가 난다 — 실측(2026-10-12)으로 <c>t1_weak</c>은 바닥이 0.17m
+        /// 공중에 떠 있었고 <c>t5_solid</c>는 0.34m가 땅에 묻혔다. 절대 미터값 하나를
+        /// 7배 벌어지는 것에 물린 자리다 (<see cref="MeshFit"/>·<c>FractureProxy</c>와 같은 함정).
+        ///
+        /// <b>토대 위에 놓인다.</b> 잔해는 제가 나온 건물 자리에 떨어지는데, 그 자리에는
+        /// 방금 토대가 섰다. 지면 높이로 놓으면 토대 속에 파묻힌다 [지적 2026-10-12].
+        /// </summary>
+        float RestHeight(Vector3 at, StructureData data)
+        {
+            float side = Mathf.Max(0.01f, data.debrisRadius);
+            bool onTop = Hazard.ObstacleField.OnFoundation(at);
+
+            // <b>토대 위에서는 안 묻는다</b> [지시 2026-10-12]. 땅에서는 박혀 있는 꼴이 맞지만,
+            // 토대 위에서 묻으면 0.4m 상자 속으로 들어가 <b>가려진다</b> —
+            // 제일 작은 조각은 한 변이 0.16m라 통째로 사라진다.
+            float sink = onTop ? 0f : sinkShare;
+            float floor = onTop ? Destructible.FoundationHeight : 0f;
+            return floor + side * (0.5f - sink);
         }
 
         /// <summary>
@@ -77,7 +104,7 @@ namespace Demo.Destruction
             for (int attempt = 0; attempt < MaxTries; attempt++)
             {
                 Vector2 offset = Random.insideUnitCircle * data.debrisScatterRadius;
-                candidate = center + new Vector3(offset.x, groundOffset, offset.y);
+                candidate = center + new Vector3(offset.x, 0f, offset.y);
 
                 var flat = new Vector2(candidate.x, candidate.z);
                 bool clash = false;
@@ -98,11 +125,18 @@ namespace Demo.Destruction
             return candidate;
         }
 
+        /// <summary>
+        /// 더 뿌릴 수 있는 개수. <b>0 이하면 상한이 없다</b> [지시 2026-10-13].
+        ///
+        /// 상한을 두던 이유는 모바일 드로우콜 예산이었는데, 기획자가 상한을 빼기로 했다 —
+        /// 잘리면 "부쉈는데 잔해가 안 나온다"가 되고, 그게 이 게임에서 제일 보여야 할 것을 지운다.
+        /// <b>CLAUDE.md 성능 예산표의 '동시 잔해 500'은 이 결정으로 낡았다.</b>
+        /// </summary>
         static int RemainingBudget()
         {
             GameConfig cfg = GameConfigRef.Current;
-            int cap = cfg != null ? cfg.debrisMaxActive : 80;
-            return cap - Debris.Active.Count;
+            int cap = cfg != null ? cfg.debrisMaxActive : 0;
+            return cap > 0 ? cap - Debris.Active.Count : int.MaxValue;
         }
     }
 }

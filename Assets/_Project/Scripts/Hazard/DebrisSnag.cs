@@ -31,6 +31,8 @@ namespace Demo.Hazard
             Snap = 3,
             /// <summary>걸려 있는 동안 느려진다. 피해를 시간으로 환산한다 (GAME_DESIGN §6)</summary>
             Slow = 4,
+            /// <summary>부딪힐 때마다 <b>보유량의 일정 비율</b>을 흘린다 [지시 2026-10-12]</summary>
+            DropShare = 5,
         }
 
         [SerializeField, Tooltip("걸렸을 때 무엇을 할 것인가.\n" +
@@ -49,6 +51,13 @@ namespace Demo.Hazard
                  "1이면 보이는 크기 그대로. 작게 하면 스칠 때는 안 걸린다")]
         float radiusScale = 0.8f;
 
+        [SerializeField, Range(0f, 1f), Tooltip("DropShare에서 한 번 부딪힐 때 흘리는 비율.")]
+        float dropShare = 0.10f;
+
+        [SerializeField, Range(0f, 10f), Tooltip("거둔 짐이 토대를 못 벗어날 때 면제를 끊는 상한(초). "
+                 + "보통은 시간이 아니라 토대를 벗어나는 순간 끝난다 [지시 2026-10-12]")]
+        float pickupExemptSeconds = 4f;
+
         [SerializeField, Range(0f, 5f), Tooltip("한 번 터진 뒤 다시 터질 때까지의 쉬는 시간(초).\n" +
                  "0이면 접촉이 이어지는 동안 유예가 계속 다시 차서 연달아 터진다 — " +
                  "실측에서 건물 한 채를 스치는 데 6번 터져 20개 중 18개를 잃었다 [고침 2026-10-02]")]
@@ -56,6 +65,8 @@ namespace Demo.Hazard
 
         float stuckFor;
         float cooldownLeft;
+        float exemptLeft;
+        bool stillOnFoundation;
 
         /// <summary>이번 프레임에 걸린 조각 수. 실측·연출이 읽는다.</summary>
         public int SnaggedNow { get; private set; }
@@ -75,10 +86,32 @@ namespace Demo.Hazard
         public float SpeedScale =>
             mode == Response.Slow && SnaggedNow > 0 ? slowFactor : 1f;
 
-        /// <summary>DropOff·Snap이 터질 조건을 채웠는가. 쉬는 중이면 안 터진다.</summary>
+        /// <summary>무엇을 잃는 반응이 터질 조건을 채웠는가. 쉬는 중이면 안 터진다.</summary>
         public bool Triggered =>
-            (mode == Response.DropOff || mode == Response.Snap) &&
+            (mode == Response.DropOff || mode == Response.Snap || mode == Response.DropShare) &&
             cooldownLeft <= 0f && stuckFor >= graceSeconds;
+
+        /// <summary>DropShare에서 한 번에 흘리는 비율.</summary>
+        public float DropShareRatio => dropShare;
+
+        /// <summary>
+        /// 방금 거둬들였으니 잠깐 판정을 쉰다 [지시 2026-10-12].
+        ///
+        /// <b>왜 필요한가.</b> 잔해는 제가 나온 건물의 토대 <b>위에</b> 놓인다. 토대가 장애물이
+        /// 되면 그 조각들은 <b>태어나자마자 장애물 안에 있다</b> — 원을 그려 거두는 순간
+        /// 전부 걸린 것으로 판정돼 10%씩 흘리기 시작한다. 플레이어가 잘못한 것이 하나도 없는데
+        /// 벌칙만 터지는 자리다.
+        ///
+        /// 그래서 <b>끌어내는 동안만</b> 쉰다. 토대를 벗어난 뒤부터가 진짜 판정이다.
+        /// </summary>
+        public void ExemptAfterPickup()
+        {
+            exemptLeft = pickupExemptSeconds;
+            stillOnFoundation = true;      // 막 거뒀으니 아직 토대 위다
+        }
+
+        /// <summary>지금 면제 중인가. 남은 초. 0이면 아니다.</summary>
+        public float ExemptLeft => exemptLeft;
 
         /// <summary>다시 터지기까지 남은 시간(초). 0이면 지금 터질 수 있다.</summary>
         public float CooldownLeft => cooldownLeft;
@@ -87,6 +120,7 @@ namespace Demo.Hazard
         {
             stuckFor = 0f;
             cooldownLeft = 0f;
+            exemptLeft = 0f;
             SnaggedNow = 0;
         }
 
@@ -109,6 +143,14 @@ namespace Demo.Hazard
         public bool Check(ref Vector3 position, float radius)
         {
             if (mode == Response.Pass) return false;
+            // <b>첫 고리에 한해서만</b> 면제한다 [지시 2026-10-12].
+            // 초로 끊지 않는다 — 티어가 높을수록 토대가 넓어 빠져나오는 데 더 걸리기 때문이다.
+            // 짐이 토대를 벗어나는 순간 면제가 끝나고, 거기서부터가 진짜 판정이다.
+            if (exemptLeft > 0f)
+            {
+                if (ObstacleField.OnFoundation(position)) stillOnFoundation = true;
+                return false;
+            }
             if (!ObstacleField.Overlap(position, radius * radiusScale, out Vector3 push)) return false;
 
             SnaggedNow++;
@@ -130,6 +172,13 @@ namespace Demo.Hazard
         public void End(float dt)
         {
             if (cooldownLeft > 0f) cooldownLeft -= dt;
+            if (exemptLeft > 0f)
+            {
+                // 토대를 다 벗어났으면 시간이 남았어도 끝낸다. 못 벗어나면 상한이 끊는다.
+                if (!stillOnFoundation) exemptLeft = 0f;
+                else exemptLeft -= dt;
+                stillOnFoundation = false;
+            }
 
             if (SnaggedNow > 0)
             {

@@ -47,7 +47,6 @@ namespace Demo.UI
         GameLoop loop;
         Hole hole;
         CargoTow cargo;
-        Destruction.DemolitionSession session;
 
         GUIStyle big, small;
         Texture2D px;
@@ -114,8 +113,6 @@ namespace Demo.UI
                          + hole.Radius.ToString("0.0") + "m", small);
             }
 
-            Demolition(Screen.width, h, line);
-
             // ── 견인 적재량. 지금 무엇을 끌고 있는가 ────────────────────────────
             if (cargo != null && cargo.TotalUnits > 0)
             {
@@ -125,34 +122,6 @@ namespace Demo.UI
                 Shadowed(r, "끄는 중  " + cargo.TotalUnits + "단위", small);
                 small.alignment = TextAnchor.MiddleLeft;
             }
-        }
-
-        /// <summary>
-        /// 부수는 동안 <b>얼마나 깎였는가</b> [2026-10-12]. 파괴 화면에서만 그린다.
-        ///
-        /// <b>없으면 치는 보람이 안 보인다.</b> 지금까지 이 화면에는 벽과 번쩍임뿐이라,
-        /// 두드리는 것이 먹히고 있는지 끝날 때까지 알 수 없었다 — 그 값은
-        /// <see cref="Destruction.DemolitionSession.Gauge"/>로 이미 있었고 디버그 오버레이만
-        /// 그리고 있었다. 가운데 아래에 둬서 벽도 손가락도 안 가린다.
-        /// </summary>
-        void Demolition(float w, float h, float line)
-        {
-            if (session == null) session = FindFirstObjectByType<Destruction.DemolitionSession>();
-            if (session == null || session.Target == null) return;
-
-            var mode = GameModeController.Instance;
-            if (mode != null && !mode.IsDemolition) return;
-
-            float bw = w * 0.34f, bh = h * 0.022f;
-            float x = (w - bw) * 0.5f, y = h * 0.90f;
-
-            small.alignment = TextAnchor.MiddleCenter;
-            small.normal.textColor = new Color(1f, 1f, 1f, 0.9f);
-            string name = session.Target.Data != null ? session.Target.Data.displayName : "건물";
-            Shadowed(new Rect(x, y - line * 1.15f, bw, line), name, small);
-            small.alignment = TextAnchor.MiddleLeft;
-
-            Bar(new Rect(x, y, bw, bh), session.Gauge, new Color(1f, 0.45f, 0.3f, 0.95f));
         }
 
         void Styles()

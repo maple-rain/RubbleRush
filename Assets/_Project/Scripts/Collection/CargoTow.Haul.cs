@@ -43,6 +43,29 @@ namespace Demo.Collection
                 return;
             }
 
+            if (snag.Mode == Hazard.DebrisSnag.Response.DropShare)
+            {
+                // <b>부딪힐 때마다 보유량의 일정 비율을 흘린다</b> [지시 2026-10-12 · 10%].
+                //
+                // 걸린 조각부터 떨군다 — 부딪힌 것이 떨어지는 쪽이 화면에서 읽힌다.
+                // 모자라면 뒤쪽(제일 늦게 담긴 것)에서 채운다.
+                //
+                // <b>최소 한 개</b>다. 10%를 반올림하면 넷 이하일 때 0이 되는데,
+                // 0을 떨구면 소리만 나고 아무 일도 안 일어나 규칙이 안 보인다.
+                int want = Mathf.Max(1, Mathf.RoundToInt(towed.Count * snag.DropShareRatio));
+                int lost = 0;
+
+                for (int i = 0; i < snagged.Count && lost < want; i++)
+                    if (Detach(snagged[i])) lost++;
+
+                for (int i = towed.Count - 1; i >= 0 && lost < want; i--)
+                    if (Detach(towed[i])) lost++;
+
+                snag.Consume(lost);
+                snagged.Clear();
+                return;
+            }
+
             // DropOff — 걸린 조각만 그 자리에 남는다
             for (int i = 0; i < snagged.Count; i++) Detach(snagged[i]);
             snag.Consume(snagged.Count);

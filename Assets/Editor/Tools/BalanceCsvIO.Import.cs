@@ -162,9 +162,10 @@ namespace Demo.EditorTools
             {
                 levels.Add(new GameConfig.HoleLevel {
                     radius = Csv.Num(r, 1, 0f),
-                    xpToNext = Csv.Int(r, 2, 0),
+                    cableLength = Csv.Num(r, 2, 0f),
+                    xpToNext = Csv.Int(r, 3, 0),
                 });
-                if (first) { cfg.xpPerDebrisUnit = Csv.Int(r, 3, cfg.xpPerDebrisUnit); first = false; }
+                if (first) { cfg.xpPerDebrisUnit = Csv.Int(r, 4, cfg.xpPerDebrisUnit); first = false; }
             }
 
             if (levels.Count > 0) cfg.holeLevels = levels.ToArray();
