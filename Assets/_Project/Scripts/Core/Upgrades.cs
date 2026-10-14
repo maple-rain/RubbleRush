@@ -82,24 +82,18 @@ namespace Demo.Core
             into.Clear();
             if (cfg == null || cfg.upgrades == null || cfg.upgrades.Length == 0) return into;
 
-            int finalStage = 0;
+            // 이 단계에 '이것들만' 표시가 붙은 카드가 남아 있으면 그것들만 내민다
+            // [지시 2026-10-14]. 마지막 단계를 "다 키운 것에 대한 보상"으로 두기 위한 것이고,
+            // 켜지 않으면 평소처럼 쌓인 것 중에서 뽑는다.
+            bool lastOnly = false;
             foreach (GameConfig.Upgrade u in cfg.upgrades)
-                if (u != null && u.unlockStage > finalStage) finalStage = u.unlockStage;
-
-            // 마지막 단계에 카드가 <b>딱 한 장</b>일 때만 그것만 내민다.
-            // 여러 장이면 평소처럼 쌓인 것 중에서 뽑는다 — 안 그러면 앞 단계에서
-            // 안 고른 카드들이 영영 안 나온다.
-            int atFinal = 0;
-            foreach (GameConfig.Upgrade u in cfg.upgrades)
-                if (u != null && u.unlockStage == finalStage) atFinal++;
-
-            bool lastOnly = stage >= finalStage && atFinal == 1;
+                if (u != null && u.exclusive && u.unlockStage <= stage && !Has(u.id)) lastOnly = true;
 
             foreach (GameConfig.Upgrade u in cfg.upgrades)
             {
                 if (u == null || string.IsNullOrEmpty(u.id)) continue;
                 if (Has(u.id)) continue;
-                if (lastOnly ? u.unlockStage != finalStage : u.unlockStage > stage) continue;
+                if (lastOnly ? !u.exclusive : u.unlockStage > stage) continue;
                 into.Add(u);
             }
 

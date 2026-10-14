@@ -160,6 +160,12 @@ namespace Demo.Data
 
             [Tooltip("배율 또는 양. 뜻은 id마다 다르다")]
             public float value = 1f;
+
+            [Tooltip("켜면 이 단계에서는 <b>같은 표시가 붙은 카드끼리만</b> 내민다 " +
+                     "[지시 2026-10-14].\n" +
+                     "마지막 단계용이다 — 앞에서 안 고른 카드가 섞여 올라오면 " +
+                     "'다 키운 것에 대한 보상'이라는 뜻이 흐려진다")]
+            public bool exclusive;
         }
 
         /// <summary>

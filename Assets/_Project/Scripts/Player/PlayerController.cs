@@ -23,6 +23,12 @@ namespace Demo.Player
                  "3m 로봇의 보폭에서 잡았다. 작으면 종종거리고, 크면 미끄러져 보인다")]
         float stepDistance = 2.2f;
 
+        [SerializeField, Range(0.3f, 6f), Tooltip("'약한 자성'으로 잔해가 끌려오는 속도(m/s) " +
+                 "[제안·미승인]. 끌리는 범위는 업그레이드 표가 정한다.\n" +
+                 "내 속도의 1/4쯤이라 '약하게'가 읽힌다 — 더 올리면 빨아들이는 것처럼 보이고 " +
+                 "구멍의 흡인과 구분이 안 간다")]
+        float magnetSpeed = 1.5f;
+
         [Header("연결 — 같은 오브젝트에 있으면 Awake가 알아서 잡는다")]
         [SerializeField] InputRouter input;
         [SerializeField] Collection.CargoTow cargo;
@@ -147,6 +153,48 @@ namespace Demo.Player
             cc.Move(motion);
 
             Footsteps(dt);
+            Magnet(dt);
+        }
+
+        /// <summary>
+        /// 약한 자성 — 가까운 잔해가 천천히 끌려온다 [지시 2026-10-13].
+        ///
+        /// <b>흩어짐을 줄이지 않는 쪽으로 같은 문제를 푼다.</b> 처음에는 "잔해가 덜 흩어진다"는
+        /// 카드를 만들었는데, 흩어짐을 넓힌 이유가 <b>조각이 겹치지 않고 하나하나 보이게</b>
+        /// 하려던 것이라 그 카드가 가시성을 되돌려 버렸다. 흩어진 채로 두고 끌어오면
+        /// 줍는 수고만 줄고 보이는 것은 그대로다.
+        ///
+        /// <b>구멍의 흡인과 같은 모양이다</b> — 가까울수록 세게 당긴다. 균일하게 당기면
+        /// 멀리서부터 질질 끌려와 '빨려드는' 느낌이 안 난다.
+        ///
+        /// 끌려 가는 중인 것과 구멍으로 떨어지는 중인 것은 건드리지 않는다.
+        /// </summary>
+        void Magnet(float dt)
+        {
+            float reach = Core.Upgrades.Value(Core.Upgrades.Magnet, 0f);
+            if (reach <= 0.01f) return;
+
+            Vector3 here = transform.position;
+            var flat = new Vector2(here.x, here.z);
+            float reachSqr = reach * reach;
+
+            var active = Collection.Debris.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                Collection.Debris d = active[i];
+                if (d == null || d.IsTowed || d.IsFalling || d.IsBeingSucked) continue;
+
+                Vector2 to = flat - d.FlatPosition;
+                float sqr = to.sqrMagnitude;
+                if (sqr > reachSqr || sqr < 0.04f) continue;
+
+                float closeness = 1f - Mathf.Sqrt(sqr) / reach;
+                float step = magnetSpeed * Mathf.Lerp(0.25f, 1f, closeness) * dt;
+
+                Vector3 p = d.transform.position;
+                Vector2 dir = to.normalized * step;
+                d.transform.position = new Vector3(p.x + dir.x, p.y, p.z + dir.y);
+            }
         }
 
         /// <summary>
