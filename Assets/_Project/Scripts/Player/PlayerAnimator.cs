@@ -130,6 +130,10 @@ namespace Demo.Player
             // 모바일 예산에서 잴 수 있는 값이 아니다.
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
+            // 발가락 뼈는 여기서 한 번만 찾는다. 발소리가 이 뼈의 높이로 난다 —
+            // FootPlant.cs 참조.
+            foot.Bind(transform);
+
             // 이름으로 찾는다. 층 순서를 바꿔도 따라온다.
             for (int i = 0; i < anim.layerCount; i++)
             {
@@ -275,9 +279,9 @@ namespace Demo.Player
 
             // 발소리는 <b>여기서</b> 난다 [고침 2026-10-14]. 발이 닿는 순간을 아는 것은
             // 애니메이션뿐이다 — 걸은 거리로 내면 다리와 계속 어긋난다.
-            if (foot.Tick(anim, 0, locomotion.Blend) > 0)
-                Utils.GameAudio.Play(Data.Sfx.Footstep,
-                                     player != null ? player.transform.position : transform.position);
+            Transform body = player != null ? player.transform : transform;
+            if (foot.Tick(body, locomotion.Blend, Time.deltaTime) > 0)
+                Utils.GameAudio.Play(Data.Sfx.Footstep, body.position);
 
             DriveTwist();
 

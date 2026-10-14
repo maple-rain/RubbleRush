@@ -56,9 +56,19 @@ DEFAULT_SRC = os.path.join(os.path.expanduser('~'), 'Downloads')
 # 과도음이 서로 메워져 뭉개진다. 기획자 말대로 "이상하게 만져서 먹먹해졌"다.
 #
 # 받은 소리는 그 자체로 과격하고 날것이다. 그대로 쓴다.
+# <b>일곱 장 전부가 각각 한 장의 타격음이다</b> [지시 2026-10-14].
+#
+# 기획자 지시: "원래 준 사운드를 그대로 사용하는거로, 피치 조절등을 하지 않고,
+# 7종을 랜덤으로 재생하는것이다. 똑바로 사운드 변함이 안 느껴진다."
+#
+# 셋만 쓸 때는 변형이 적어 같은 소리로 들렸다. 일곱이면 한 바퀴가 길어진다.
 SOURCES = ['firecracker_bang (1).wav',
            'firecracker_bang (2).wav',
-           'firecracker_bang (3).wav']
+           'firecracker_bang (3).wav',
+           'cannon_fire (1).wav',
+           'cannon_fire (2).wav',
+           'cannon_fire (3).wav',
+           'fighting_sound (1).wav']
 
 # <b>변형끼리 음량을 맞출 것인가.</b> 기획자 지시로 꺼 두었다 — "원본 그대로 가자".
 MATCH_LEVEL = False
@@ -241,7 +251,7 @@ def main():
         made.append(name)
 
     print()
-    print('한 변형이 한 장이다 — 섞지 않는다. 필터도 없다.')
+    print('일곱 장이 일곱 가지 타격음이다 — 섞지 않는다. 필터도 피치 조절도 없다.')
     print('음원에 한 일: 앞 무음 떼기 · 0.30초로 자르기 · 끝 내리기. 그게 전부다.')
     print('피크-RMS가 곧 때리는 느낌이다. 겹쳐 섞으면 이 값이 떨어진다 (15.2 -> 11.9dB였다).')
     if MATCH_LEVEL:

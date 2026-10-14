@@ -111,8 +111,30 @@ namespace Demo.Utils
             // 타격 화면에서는 무조건 플레이어 기준 가운데에서 낸다 [지시 2026-10-14].
             // 1인칭으로 붙어 치는 화면이라 소리가 좌우로 치우치면 내가 치는 것 같지 않다.
             bool flat = e.flat || InDemolition();
-            pool.PlayAny(e.clips, at, e.volume * volumeScale * master, pitch, flat);
+            pool.Play(e.clips[NextClip(e)], at, e.volume * volumeScale * master, pitch, flat);
             PlayedCount++;
+        }
+
+        /// <summary>
+        /// 다음에 울릴 음원의 번호. <b>직전에 쓴 것은 안 고른다</b> [지시 2026-10-14].
+        ///
+        /// <b>왜 그냥 무작위로 하면 안 되는가.</b> 7장을 매번 똑같이 무작위로 고르면
+        /// <b>일곱 번에 한 번은 같은 것이 두 번 연속</b> 나온다. 초당 다섯 번 치는
+        /// 소리라서 그 한 번이 바로 "사운드 변함이 안 느껴진다"로 들린다.
+        ///
+        /// 남은 것 중에서만 고른다 — 7장이면 6장 중 하나다. 그래서 <b>칠 때마다
+        /// 반드시 다른 소리</b>가 난다.
+        /// </summary>
+        static int NextClip(SoundBank.Entry e)
+        {
+            int n = e.clips.Length;
+            if (n <= 1) return 0;
+
+            // 직전 것을 빼고 뽑는다. 뽑은 번호가 직전 이상이면 하나 밀어 건너뛴다 —
+            // 이렇게 하면 다시 뽑는 반복문 없이 한 번에 균등하게 고를 수 있다.
+            int k = Random.Range(0, n - 1);
+            if (e.LastClip >= 0 && k >= e.LastClip) k++;
+            return e.LastClip = k % n;
         }
 
         /// <summary>

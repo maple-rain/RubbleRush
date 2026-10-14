@@ -42,6 +42,15 @@ namespace Demo.Data
 
             /// <summary>마지막으로 울린 시각. 런타임 전용이라 직렬화하지 않는다.</summary>
             [System.NonSerialized] public float LastAt = float.NegativeInfinity;
+
+            /// <summary>
+            /// 직전에 고른 음원의 번호. <b>연달아 같은 것을 안 뽑으려고</b> 들고 있다
+            /// [더함 2026-10-14].
+            ///
+            /// 그냥 무작위로 고르면 7장이어도 <b>일곱 번에 한 번은 같은 것이 두 번 연속</b>
+            /// 나온다. 초당 다섯 번 치는 소리라 그 한 번이 바로 "변하지 않는다"로 들린다.
+            /// </summary>
+            [System.NonSerialized] public int LastClip = -1;
         }
 
         [SerializeField, Tooltip("소리 목록. Demo/16으로 파일 이름에서 자동으로 채울 수 있다")]
