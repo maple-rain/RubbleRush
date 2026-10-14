@@ -121,36 +121,70 @@ def save(name, x):
     return path
 
 
-def build(crack_raw, boom_raw, v):
-    """한 발. 균열의 앞부분 + 저역만 남긴 포성."""
+def pitch(x, rate):
+    """재생 속도를 바꿔 음을 옮긴다. 한 음원을 세 변형에 쓸 때 같은 소리로 안 들리게 한다."""
+    if abs(rate - 1.0) < 0.001 or x.size < 4:
+        return x
+    m = max(4, int(round(x.size / rate)))
+    return np.interp(np.linspace(0, x.size - 1, m), np.arange(x.size), x)
+
+
+def build(crack_raw, boom_raw, thud_raw, v):
+    """
+    한 발 = 세 겹. <b>타격감은 묵직한 쪽에서 나온다</b> [지시 2026-10-14].
+
+    ① 균열(firecracker) : 고역만. 벽이 <b>깨지는</b> 질감 — 양념이다
+    ② 본체(fighting)    : 저역. <b>여기가 타격감이다.</b> 제일 크게 들어간다
+    ③ 꼬리(cannon)      : 더 낮은 저역. 뒤에 남아 울린다
+
+    처음에는 균열을 제일 크게(1.0) 두고 포성을 받침(0.62)으로 썼는데, 그러면
+    '깨지는 소리'는 나도 '맞은 느낌'이 안 난다. 받아 온 fighting_sound가
+    <b>저역 84%</b>라 본체로 쓰기에 맞다.
+    """
     n = int(SR * LENGTH)
     out = np.zeros(n)
 
-    # ① 균열 — 소리가 시작되는 자리부터 짧게. 고역을 살려 '깨지는' 느낌을 남긴다
-    c = crack_raw[onset(crack_raw):]
-    c = c[:int(SR * CRACK_SHARE)]
-    c = highpass(c, 700) * 0.85 + c * 0.15
-    c = c * decay(c.size, 0.004, 0.02, 2.6)
-
-    # <b>섞기 전에 각각 음량을 맞춘다</b> [고침 2026-10-14]. 원본마다 고역·저역이
-    # 들어 있는 양이 다르다 — 그대로 더하면 변형마다 균형이 제각각이 된다
+    # <b>겹마다 섞기 전에 음량을 맞춘다</b> [고침 2026-10-14]. 원본마다 들어 있는
+    # 고역·저역 양이 달라서, 그대로 더하면 변형마다 균형이 제각각이 된다
     # (실측: 저역:고역이 9.8 / 11.1 / 51.9로 2번만 다섯 배 무거웠다).
-    # 각자 1로 맞춰 놓고 아래 가중치로만 섞으면 균형이 셋 다 같아진다.
-    c = norm(c, 1.0)
-    out[:c.size] += c * 1.0
 
-    # ② 포성 — 저역만. 균열보다 조금 늦게 들어와야 '맞고 나서 울린다'가 된다
-    b = boom_raw[onset(boom_raw):]
-    b = b[:int(SR * (LENGTH - 0.01))]
-    b = lowpass(b, 220, 3)
-    b = b * decay(b.size, 0.01, 0.05, 1.8)
-    b = norm(b, 1.0)                        # 균열과 같은 이유로 여기서도 맞춘다
-    at = int(SR * (0.006 + 0.002 * v))      # 변형마다 몇 ms씩 어긋나게
+    # ① 균열 — 짧게. 때리는 순간의 질감만 얹는다
+    c = crack_raw[onset(crack_raw):][:int(SR * CRACK_SHARE)]
+    c = highpass(c, 900) * 0.9 + c * 0.1
+    c = norm(c * decay(c.size, 0.003, 0.02, 2.8), 1.0)
+    out[:c.size] += c * 0.95
+
+    # ② 본체 — 묵직함을 만드는 겹. 변형마다 음을 조금 옮겨 같은 소리로 안 들리게 한다
+    t = thud_raw[onset(thud_raw):][:int(SR * LENGTH)]
+    t = pitch(t, 1.0 + 0.08 * (v - 0.5) * 2.0)
+    t = lowpass(t, 400, 2)
+    t = norm(t * decay(t.size, 0.02, 0.06, 1.5), 1.0)
+    room = min(t.size, n)
+    out[:room] += t[:room] * 0.88
+
+    # ③ 중역 — <b>폰 스피커를 위한 겹</b> [실측 2026-10-14].
+    #
+    # 저역만 쌓으면 헤드폰에서는 묵직한데 폰에서는 거의 안 들린다 — 폰 스피커는
+    # 저역을 물리적으로 못 낸다. 실측에서 500Hz 위 에너지가 2.1%까지 떨어졌고,
+    # 그 상태면 안드로이드에서 '툭' 소리만 남는다.
+    #
+    # 본체에서 중역만 떠서 얹는다. 새 소리를 더하는 것이 아니라 <b>같은 소리의
+    # 다른 대역</b>이라, 묵직함을 깎지 않으면서 '닿는 소리'가 생긴다.
+    m = thud_raw[onset(thud_raw):][:int(SR * 0.12)]
+    m = highpass(lowpass(m, 2600, 2), 600, 2)
+    m = norm(m * decay(m.size, 0.004, 0.03, 2.4), 1.0)
+    out[:m.size] += m * 0.80
+
+    # ④ 꼬리 — 더 낮게, 조금 늦게. '맞고 나서 울린다'를 만든다
+    b = boom_raw[onset(boom_raw):][:int(SR * (LENGTH - 0.01))]
+    b = lowpass(b, 150, 3)
+    b = norm(b * decay(b.size, 0.01, 0.05, 1.6), 1.0)
+    at = int(SR * (0.010 + 0.003 * v))
     room = min(b.size, n - at)
     if room > 0:
-        out[at:at + room] += b[:room] * (0.62 + 0.06 * v)   # 균열보다 작게 — 몸통은 받쳐 주는 역할이다
+        out[at:at + room] += b[:room] * 0.5
 
-    out *= decay(n, LENGTH * 0.25, 0.012, 2.0)
+    out *= decay(n, LENGTH * 0.3, 0.012, 1.8)
     return norm(out)
 
 
@@ -163,6 +197,14 @@ def main():
 
     os.makedirs(os.path.normpath(OUT), exist_ok=True)
 
+    tp = os.path.join(src, 'fighting_sound (1).wav')
+    if not os.path.exists(tp):
+        print('본체 음원을 못 찾았다:', tp)
+        return 1
+    thud = load(tp)
+    print('  본체  fighting_sound (1)  시작 %.0fms · 저역이 84%%라 여기가 타격감이다'
+          % (onset(thud) * 1000.0 / SR))
+
     made = []
     for i in (1, 2, 3):
         cp = os.path.join(src, 'firecracker_bang (%d).wav' % i)
@@ -172,10 +214,10 @@ def main():
             return 1
 
         crack, boom = load(cp), load(bp)
-        print('  %d번  균열 시작 %5.0fms · 포성 시작 %5.0fms'
+        print('  %d번  균열 시작 %5.0fms · 꼬리 시작 %5.0fms'
               % (i, onset(crack) * 1000.0 / SR, onset(boom) * 1000.0 / SR))
 
-        x = build(crack, boom, (i - 1) / 2.0)
+        x = build(crack, boom, thud, (i - 1) / 2.0)
         name = 'SFX_Strike_%02d' % i
         if write:
             print('    ->', save(name, x), '%.2f초' % (x.size / float(SR)))
