@@ -116,21 +116,30 @@ def tail_fade(x, seconds=0.025):
 
 
 def take(x):
-    """<b>이 도구가 음원에 하는 일의 전부다.</b> 무음을 떼고, 0.30초로 자르고, 끝을 내린다."""
+    """
+    <b>길이만 자른다</b> [지시 2026-10-14]: "원래 사운드 그대로 쓰고 사운드의 길이만 조절".
+
+    앞에서 자르지 않는다. 음량도 건드리지 않는다. 섞지도 않는다.
+    끝의 5ms만 0으로 내리는데, 그건 손질이 아니라 <b>자른 자리에서 나는 '딱' 소리를
+    없애는 것</b>이다 — 그 클릭은 원본에 없던 소리다.
+    """
     n = int(SR * LENGTH)
-    y = x[onset(x):][:n]
+
+    # 어디서부터 가져올지만 고른다. 보통은 맨 앞이다.
+    #
+    # <b>앞이 비어 있으면 소리가 있는 데서 가져온다.</b> `firecracker_bang (2)`는
+    # 폭발이 1205ms라 앞 0.30초가 거의 무음이다(피크 -21.2dB). 그걸 쓰면 그 변형만
+    # 소리가 안 난다. 소리를 만지는 것이 아니라 <b>어느 0.30초를 가져올지</b>의 문제다.
+    start = 0
+    if x.size > n and float(np.max(np.abs(x[:n]))) < float(np.max(np.abs(x))) * 0.25:
+        start = onset(x)
+
+    y = x[start:start + n].copy()
     if y.size < n:
         y = np.pad(y, (0, n - y.size))
-    return tail_fade(y)
-
-
-def _unused_equal_energy(waves):
-    """같은 에너지로 맞춘다. 누가 더 크고 작을지는 내가 정할 일이 아니다."""
-    out = []
-    for w in waves:
-        e = float((w ** 2).sum())
-        out.append(w / np.sqrt(e) if e > 1e-12 else w)
-    return out
+    k = min(y.size, max(1, int(SR * 0.005)))
+    y[-k:] *= np.linspace(1.0, 0.0, k)
+    return y
 
 
 def norm(x, peak=PEAK):
@@ -228,13 +237,11 @@ def main():
             print('원본을 못 찾았다:', path)
             return 1
         raw = load(path)
-        print('  %-26s 시작 %5.0fms · 원본 %.2f초' % (name[:-4], onset(raw) * 1000.0 / SR,
-                                                   raw.size / float(SR)))
-        cuts.append(norm(take(raw)))
-
-    raw_db = [rms_db(c) for c in cuts]
-    if MATCH_LEVEL:
-        cuts = match_level(cuts)
+        peak_ms = onset(raw) * 1000.0 / SR
+        warn = '  << 제일 센 소리가 자르는 범위 밖이다' if peak_ms > LENGTH * 1000.0 else ''
+        print('  %-26s 원본 %.2f초 · 제일 센 소리 %5.0fms%s'
+              % (name[:-4], raw.size / float(SR), peak_ms, warn))
+        cuts.append(take(raw))                 # 길이만 자른다. 음량도 안 건드린다
 
     print()
     made = []
@@ -245,19 +252,15 @@ def main():
         else:
             disk = cut
         lo, hi = bands(disk)
-        print('  %s  %s  %.2f초  저역 %.1f%% · 고역 %.1f%% · 2kHz 위 %.1f%%   피크-RMS %.1fdB'
-              % (name, '썼다' if write else '(안 씀)', LENGTH, lo, hi, top_band(disk),
-                 crest_db(disk)))
+        print('  %s  %s  %.2f초  피크 %.1fdB  RMS %.1fdB  (원본 그대로)'
+              % (name, '썼다' if write else '(안 씀)', LENGTH,
+                 20.0 * np.log10(max(float(np.max(np.abs(disk))), 1e-9)), rms_db(disk)))
         made.append(name)
 
     print()
-    print('일곱 장이 일곱 가지 타격음이다 — 섞지 않는다. 필터도 피치 조절도 없다.')
-    print('음원에 한 일: 앞 무음 떼기 · 0.30초로 자르기 · 끝 내리기. 그게 전부다.')
-    print('피크-RMS가 곧 때리는 느낌이다. 겹쳐 섞으면 이 값이 떨어진다 (15.2 -> 11.9dB였다).')
-    if MATCH_LEVEL:
-        print('변형끼리 음량을 맞췄다 — 끄려면 MATCH_LEVEL = False.')
-    else:
-        print('음량은 원본 그대로다 [지시] — 맞추려면 MATCH_LEVEL = True.')
+    print('음원에 한 일: <길이 자르기> 하나뿐이다 [지시 "원래 사운드 그대로, 길이만 조절"].')
+    print('앞을 떼지도, 음량을 맞추지도, 섞지도, 피치를 건드리지도 않았다.')
+    print('길이를 바꾸려면 LENGTH 하나만 고치면 된다 (지금 %.2f초).' % LENGTH)
     print()
     if not write:
         print('재기만 했다. 실제로 쓰려면 --write 를 붙일 것.')

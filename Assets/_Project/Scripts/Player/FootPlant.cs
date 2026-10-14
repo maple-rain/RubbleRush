@@ -42,15 +42,17 @@ namespace Demo.Player
                  "진짜 착지(바닥에서 0cm)와 발끝을 굴리는 얕은 골(2.8cm)이다. 그 사이를 가른다")]
         float plantMargin = 0.01f;
 
-        [SerializeField, Range(0.02f, 0.5f),
-         Tooltip("다시 울리기 전에 발이 이만큼(높이 범위 대비) 떠야 한다.\n" +
-                 "바닥 근처에서 미세하게 흔들릴 때 연타로 울리는 것을 막는다")]
-        float rearmAt = 0.55f;
+        [SerializeField, Range(0.01f, 0.2f),
+         Tooltip("다시 울리기 전에 발이 바닥에서 이만큼(m) 떠야 한다.\n\n" +
+                 "비율이 아니라 거리인 이유 [고침 2026-10-14]: 범위의 비율로 잡았더니 " +
+                 "달리기 범위(69cm)가 걷기의 재장전 문턱을 40.8cm까지 끌어올렸고, " +
+                 "걷기에서 발이 28cm밖에 안 떠서 영영 재장전이 안 됐다 — 발소리가 통째로 멎었다")]
+        float liftMargin = 0.04f;
 
         [SerializeField, Range(1f, 20f),
          Tooltip("최근 높낮이를 재는 구간의 길이(초). 걷기 한 바퀴(1.125초)보다 길어야 한다.\n" +
                  "짧으면 한 걸음을 통째로 못 봐서 위아래 기준이 뜻을 잃는다")]
-        float forget = 6f;
+        float forget = 1.6f;
 
         [SerializeField, Range(0f, 0.5f),
          Tooltip("이보다 느리면 발소리를 내지 않는다. 제자리 대기에서 울리지 않게 하는 문턱")]
@@ -113,9 +115,20 @@ namespace Demo.Player
             if (toes == null || toes.Length == 0 || root == null) return 0;
 
             // 멈춰 있을 때는 재지 않는다. 대기 동작의 미세한 발 흔들림으로 울리면 안 된다.
+            //
+            // <b>기억도 같이 비운다</b> [고침 2026-10-14]. 안 비우면 서 있던 자세의 발 높이와
+            // 달리던 때의 발 높이가 한 창에 섞인다. 실측에서 바닥 기준이 선 자세의 5.7cm로,
+            // 천장이 달리기의 69.5cm로 잡히는 바람에 <b>걷기에서는 착지도 재장전도
+            // 영영 일어나지 않았다</b> — 발소리가 통째로 멎었다.
             if (blend < minBlend)
             {
-                for (int i = 0; i < feet.Length; i++) feet[i].Armed = false;
+                for (int i = 0; i < feet.Length; i++)
+                    feet[i] = new Foot
+                    {
+                        Low = float.MaxValue, High = float.MinValue,
+                        WinLow = float.MaxValue, WinHigh = float.MinValue,
+                        Armed = true,
+                    };
                 return 0;
             }
 
@@ -149,16 +162,16 @@ namespace Demo.Player
                 float high = Mathf.Max(f.High, f.WinHigh);
                 float span = high - low;
 
-                if (span > 0.01f)
+                // <b>둘 다 바닥에서의 거리로 잰다.</b> 비율로 잡으면 달리기의 넓은 범위가
+                // 걷기의 문턱까지 끌어올려, 걷기에서 영영 안 울리게 된다.
+                if (span > plantMargin)
                 {
-                    // 닿는 판정은 <b>바닥에서의 거리</b>로, 다시 받는 판정은 <b>범위의 비율</b>로.
-                    // 뜨는 높이는 걷기와 달리기가 다섯 배 다르지만 땅은 한 곳이다.
                     if (f.Armed && y <= low + plantMargin)
                     {
                         f.Armed = false;                 // 닿았다
                         hits++;
                     }
-                    else if (!f.Armed && y >= low + span * rearmAt)
+                    else if (!f.Armed && y >= low + liftMargin)
                     {
                         f.Armed = true;                  // 충분히 떴다 — 다음 착지를 받는다
                     }
