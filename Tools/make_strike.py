@@ -8,10 +8,22 @@
 (앞 50ms 에너지 0%) 길이가 1.15~5.79초다. 타격음은 **초당 다섯 번** 울리므로
 한 발이 0.2초보다 길면 다음 발과 겹쳐 뭉갠다. 지금 쓰는 소리가 0.34초인 것이 그 이유다.
 
-**어떻게 섞는가.** 둘은 역할이 다르다.
-- `firecracker` : 날카로운 균열. **맨 앞의 과도음**만 쓴다 — 벽이 깨지는 소리다.
-- `cannon`      : 묵직한 저역. 저역만 남겨 **뒤에 깔아** 무게를 준다.
-한 소리에서 고역과 저역을 다 뽑으려 하지 않는다. 각자 잘하는 대역만 가져온다.
+**어떻게 섞는가.** 실측하면 셋이 가진 것이 다르다 (시작부터 0.30초 구간, 네 대역):
+
+| 음원 | <150Hz | 150~500 | 500~2k | >2k |
+|---|---|---|---|---|
+| `firecracker` | 2~38% | 13~29% | 23~28% | **18~61%** |
+| `cannon` | **74~90%** | 7~17% | 2~8% | 0.5~2% |
+| `fighting` | 44% | 29% | 9% | 18% |
+
+**`firecracker`가 전 대역을 가진 유일한 음원이다 — 그래서 본체로 쓴다.**
+`cannon`은 서브베이스뿐이라 무게만 맡고, `fighting`은 받침이다.
+
+처음에는 거꾸로 했다. `firecracker`를 앞 0.16초만 뿌리는 양념으로 쓰고
+`fighting_sound`를 본체+중역으로 올려 **그 한 장이 66%**를 차지했다.
+기획자가 "제공한 6개를 쓰라고 했는데 쓴 것 같지 않다"고 지적했고, 재 보니
+처음 받은 6개가 34%뿐이었다 — `cannon`은 150Hz 아래로 깎아 6%만 넣어
+**폰 스피커로는 들릴 수가 없었다.** 대역 균형을 맞추는 데 쫓겨 재료를 잃은 것이다.
 
 **소리가 시작되는 자리를 찾아 자른다.** 무음을 그대로 두면 주먹이 닿고 나서
 소리가 늦게 나 '맞은 것 같지 않다'가 된다.
@@ -30,21 +42,22 @@ import numpy as np
 SR = 48000
 PEAK = 10 ** (-2.0 / 20.0)          # 프로젝트 기준선 -2.0 dBFS
 LENGTH = 0.30                       # 한 발의 길이(초). 초당 다섯 번이라 0.2초 간격이다
-CRACK_SHARE = 0.16                  # firecracker에서 가져올 앞부분(초)
 
-# ── 겹이 차지할 몫 ─────────────────────────────────────────────────────────
+# ── 음원이 차지할 몫 ───────────────────────────────────────────────────────
 #
-# <b>피크가 아니라 에너지로 나눈다</b> [고침 2026-10-14]. 전에는 겹마다 피크를 1.0으로
-# 맞추고 가중치를 곱했는데, 피크가 같아도 <b>0.30초짜리 저역과 0.16초짜리 고역은
-# 에너지가 12배 차이 난다.</b> 그래서 "균열 0.95 · 본체 0.88"이라고 적어 두고도
-# 실제로는 균열이 전체의 4.9%밖에 안 됐다 — 기획자가 지정한 firecracker가 거의 안 들렸다.
+# <b>피크가 아니라 에너지로 나눈다</b> [고침 2026-10-14]. 겹마다 피크를 1.0으로 맞추고
+# 가중치를 곱하면, 피크가 같아도 <b>0.30초짜리 저역과 0.16초짜리 고역은 에너지가
+# 12배 차이 난다.</b> "균열 0.95"라고 적어 두고 실제로는 4.9%였던 적이 있다.
 #
-# 여기 숫자는 그대로 <b>최종 에너지 비율</b>이다. 합이 1이고, 0.22면 전체의 22%다.
-# 재 보면 적힌 대로 나온다.
-SHARE_CRACK = 0.28                  # 균열 — 벽이 깨지는 질감
-SHARE_BODY = 0.18                   # 본체 — 묵직함
-SHARE_MID = 0.48                    # 중역 — 폰 스피커가 유일하게 낼 수 있는 대역
-SHARE_TAIL = 0.06                   # 꼬리 — 맞고 나서 울리는 저역
+# 여기 숫자는 그대로 <b>최종 에너지 비율</b>이고, 합이 1이다. 0.50이면 절반이다.
+# <b>겹이 아니라 음원 단위로 적는다</b> — 어느 음원이 몇 %인지가 바로 보여야,
+# "제공한 음원을 안 쓰고 있다"가 숫자로 드러난다.
+SHARE_CRACK = 0.50                  # firecracker — 본체. 전 대역을 가진 유일한 음원
+SHARE_BOOM = 0.26                   # cannon — 무게. 서브베이스뿐이라 이쪽만 맡는다
+SHARE_THUD = 0.24                   # fighting — 받침. 중역을 채워 폰에서 들리게 한다
+
+BOOM_CUT = 260                      # cannon을 어디까지 남길지(Hz)
+THUD_LO, THUD_HI = 500, 3200        # fighting에서 떠 올 중역
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'Assets', '_Project', 'Audio', 'SFX')
@@ -196,58 +209,78 @@ def pitch(x, rate):
 
 def build(crack_raw, boom_raw, thud_raw, v):
     """
-    한 발 = 세 겹. <b>타격감은 묵직한 쪽에서 나온다</b> [지시 2026-10-14].
+    한 발 = 세 겹. <b>음원 하나가 한 겹</b>이라, 몫이 곧 "그 음원이 몇 %인가"다.
 
-    ① 균열(firecracker) : 고역만. 벽이 <b>깨지는</b> 질감
-    ② 본체(fighting)    : 저역. 묵직함을 만든다
-    ③ 중역(fighting)    : 폰 스피커가 유일하게 낼 수 있는 대역
-    ④ 꼬리(cannon)      : 더 낮은 저역. 뒤에 남아 울린다
+    ① 본체(firecracker) : <b>전 대역.</b> 깎지 않는다 — 때리는 소리 자체다
+    ② 무게(cannon)      : 서브베이스. 이 음원에는 그것밖에 없다
+    ③ 받침(fighting)    : 중역만. 폰 스피커가 낼 수 있는 대역을 채운다
 
-    <b>몫은 SHARE_* 가 정한다</b> — 에너지 비율이라 적힌 대로 들린다.
-    받아 온 fighting_sound는 실측 <b>저역 95.4%</b>라 본체로 쓰기에 맞지만,
-    바로 그래서 몫을 안 묶어 두면 혼자 다 차지한다.
+    전에는 ①을 앞 0.16초만 쓰고 ③을 본체+중역 둘로 늘려 <b>fighting 한 장이 66%</b>
+    였다. 기획자가 준 음원 여섯이 34%였고, 그나마 cannon은 150Hz 아래로 깎여
+    실제로는 안 들렸다. <b>재료를 고르는 일과 대역을 맞추는 일을 섞어 버린 것</b>이
+    원인이다 — 지금은 재료를 먼저 정하고, 대역은 각 음원 안에서만 손본다.
     """
     n = int(SR * LENGTH)
     out = np.zeros(n)
-
-    # ① 균열 — 짧게. 때리는 순간의 질감. <b>기획자가 지정한 음원이 이것이다.</b>
-    c = crack_raw[onset(crack_raw):][:int(SR * CRACK_SHARE)]
-    c = highpass(c, 900, 2) * 0.96 + c * 0.04
-    c = share(c * decay(c.size, 0.003, 0.02, 2.8), SHARE_CRACK)
-    out[:c.size] += c
-
-    # ② 본체 — 묵직함을 만드는 겹. 변형마다 음을 조금 옮겨 같은 소리로 안 들리게 한다
-    t = thud_raw[onset(thud_raw):][:int(SR * LENGTH)]
-    t = pitch(t, 1.0 + 0.08 * (v - 0.5) * 2.0)
-    t = lowpass(t, 400, 2)
-    t = share(t * decay(t.size, 0.02, 0.06, 1.5), SHARE_BODY)
-    room = min(t.size, n)
-    out[:room] += t[:room]
-
-    # ③ 중역 — <b>폰 스피커를 위한 겹</b> [실측 2026-10-14].
-    #
-    # 저역만 쌓으면 헤드폰에서는 묵직한데 폰에서는 거의 안 들린다 — 폰 스피커는
-    # 저역을 물리적으로 못 낸다. 실측에서 500Hz 위 에너지가 2.3%까지 떨어졌고,
-    # 그 상태면 안드로이드에서 '툭' 소리만 남는다.
-    #
-    # 본체에서 중역만 떠서 얹는다. 새 소리를 더하는 것이 아니라 <b>같은 소리의
-    # 다른 대역</b>이라, 묵직함을 깎지 않으면서 '닿는 소리'가 생긴다.
-    m = thud_raw[onset(thud_raw):][:int(SR * 0.12)]
-    m = highpass(lowpass(m, 2600, 2), 600, 3)
-    m = share(m * decay(m.size, 0.004, 0.03, 2.4), SHARE_MID)
-    out[:m.size] += m
-
-    # ④ 꼬리 — 더 낮게, 조금 늦게. '맞고 나서 울린다'를 만든다
-    b = boom_raw[onset(boom_raw):][:int(SR * (LENGTH - 0.01))]
-    b = lowpass(b, 150, 3)
-    b = share(b * decay(b.size, 0.01, 0.05, 1.6), SHARE_TAIL)
-    at = int(SR * (0.010 + 0.003 * v))
-    room = min(b.size, n - at)
-    if room > 0:
-        out[at:at + room] += b[:room]
+    for lay in layers(crack_raw, boom_raw, thud_raw, v).values():
+        out += lay
 
     out *= decay(n, LENGTH * 0.3, 0.012, 1.8)
     return norm(out)
+
+
+def layers(crack_raw, boom_raw, thud_raw, v):
+    """
+    음원 하나당 겹 하나. 전부 길이 <see cref="LENGTH"/>인 배열로 돌려준다.
+
+    <b>섞기와 재기가 같은 것을 보게 하려고 따로 뺐다</b> [고침 2026-10-14].
+    전에는 기여도를 재려고 "그 음원만 빼고 다시 지어서 줄어든 양"을 봤는데,
+    <see cref="build"/>가 끝에서 정규화하므로 <b>빠진 만큼 다시 키워져 차이가 지워졌다</b> —
+    firecracker를 빼도 0%로 나오는 식이었다. 결과물을 다시 만들어 재지 않고,
+    <b>만들 때 쓴 겹을 그대로 내준다.</b>
+    """
+    n = int(SR * LENGTH)
+    out = {}
+
+    # ① 본체 — firecracker. <b>기획자가 지정한 음원이고, 전 대역을 가진 유일한 음원이다.</b>
+    # 필터를 걸지 않는다. 걸면 이 소리가 가진 것을 버리게 된다.
+    c = crack_raw[onset(crack_raw):][:n]
+    c = pitch(c, 1.0 + 0.05 * (v - 0.5) * 2.0)
+    c = share(c * decay(c.size, 0.015, 0.05, 1.9), SHARE_CRACK)
+    lay = np.zeros(n)
+    lay[:min(c.size, n)] += c[:min(c.size, n)]
+    out['firecracker'] = lay
+
+    # ② 무게 — cannon. 실측 150Hz 아래가 74~90%라 이 음원은 무게 말고 낼 것이 없다.
+    # 자르는 자리를 150에서 260으로 올렸다 — 150이면 폰 스피커가 통째로 못 낸다.
+    b = boom_raw[onset(boom_raw):][:int(SR * (LENGTH - 0.01))]
+    b = lowpass(b, BOOM_CUT, 2)
+    b = share(b * decay(b.size, 0.012, 0.05, 1.6), SHARE_BOOM)
+    at = int(SR * (0.008 + 0.003 * v))
+    lay = np.zeros(n)
+    room = min(b.size, n - at)
+    if room > 0:
+        lay[at:at + room] += b[:room]
+    out['cannon'] = lay
+
+    # ③ 받침 — fighting에서 중역만. <b>폰 스피커를 위한 겹</b> [실측 2026-10-14].
+    # 저역만 쌓으면 헤드폰에서는 묵직한데 폰에서는 '툭' 소리만 남는다.
+    m = thud_raw[onset(thud_raw):][:int(SR * 0.16)]
+    m = highpass(lowpass(m, THUD_HI, 2), THUD_LO, 3)
+    m = share(m * decay(m.size, 0.004, 0.04, 2.2), SHARE_THUD)
+    lay = np.zeros(n)
+    lay[:min(m.size, n)] += m[:min(m.size, n)]
+    out['fighting'] = lay
+
+    return out
+
+
+def source_mix(crack_raw, boom_raw, thud_raw, v):
+    """<b>음원별로 실제 몇 %인가.</b> 적은 몫이 아니라 섞을 때 쓴 겹을 재서 낸다."""
+    es = {k: float((lay ** 2).sum())
+          for k, lay in layers(crack_raw, boom_raw, thud_raw, v).items()}
+    total = sum(es.values()) or 1.0
+    return {k: 100.0 * e / total for k, e in es.items()}
 
 
 def main():
@@ -264,8 +297,8 @@ def main():
         print('본체 음원을 못 찾았다:', tp)
         return 1
     thud = load(tp)
-    print('  본체  fighting_sound (1)  시작 %.0fms · 저역 95.4%% — 몫을 안 묶으면 혼자 다 차지한다'
-          % (onset(thud) * 1000.0 / SR))
+    print('  받침  fighting_sound (1)  시작 %.0fms — 중역 %d~%dHz만 쓴다'
+          % (onset(thud) * 1000.0 / SR, THUD_LO, THUD_HI))
 
     made = []
     for i in (1, 2, 3):
@@ -276,27 +309,33 @@ def main():
             return 1
 
         crack, boom = load(cp), load(bp)
-        print('  %d번  균열 시작 %5.0fms · 꼬리 시작 %5.0fms'
-              % (i, onset(crack) * 1000.0 / SR, onset(boom) * 1000.0 / SR))
-
-        x = build(crack, boom, thud, (i - 1) / 2.0)
+        v = (i - 1) / 2.0
+        x = build(crack, boom, thud, v)
         name = 'SFX_Strike_%02d' % i
+
         if write:
             path = save(name, x)
             lo, hi = bands(read_back(path))      # 디스크에 남은 것을 잰다
-            print('    -> %s  %.2f초  저역 %.1f%%  고역 %.1f%%' % (name, x.size / float(SR), lo, hi))
         else:
             lo, hi = bands(x)
-            print('       (안 씀)  저역 %.1f%%  고역 %.1f%%' % (lo, hi))
+
+        mix = source_mix(crack, boom, thud, v)
+        print('  %s  %s  저역 %.1f%%  고역 %.1f%%   |  firecracker %.0f%% · cannon %.0f%% '
+              '· fighting %.0f%%'
+              % (name, '썼다 ' if write else '(안 씀)', lo, hi,
+                 mix.get('firecracker', 0), mix.get('cannon', 0), mix.get('fighting', 0)))
         made.append(name)
 
+    print()
+    print('오른쪽은 음원별 실제 기여도다 — 적은 몫이 아니라 섞을 때 쓴 겹을 잰 값이다.')
+    print('기획자가 준 여섯 장(firecracker + cannon)이 합쳐서 몇 %인지 여기서 바로 보인다.')
     print()
     if not write:
         print('재기만 했다. 실제로 쓰려면 --write 를 붙일 것.')
     else:
         print('%d개를 덮어썼다. 유니티가 다시 불러온다.' % len(made))
         print('길이 %.2f초 — 초당 다섯 번 쳐도 겹치지 않는다.' % LENGTH)
-        print('고역이 10%%보다 낮으면 폰 스피커에서 사라진다 — SHARE_MID를 올릴 것.')
+        print('고역이 10%보다 낮으면 폰 스피커에서 사라진다 — SHARE_THUD를 올릴 것.')
     return 0
 
 
