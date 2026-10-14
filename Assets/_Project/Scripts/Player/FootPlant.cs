@@ -67,6 +67,11 @@ namespace Demo.Player
         /// <summary>
         /// 발 하나가 기억하는 것.
         ///
+        /// <b>Armed는 false로 시작한다</b> [고침 2026-10-14]. true로 두면 기억이 빈 첫 프레임에
+        /// 바닥 기준이 곧 지금 높이라서 <b>서 있던 자세 그대로 한 번 울린다</b> —
+        /// 걷기 시작할 때마다 헛걸음이 하나 섞였다. false면 발이 한 번 떠야 비로소
+        /// 착지를 받으므로, 첫 소리가 진짜 첫 걸음에 난다.
+        ///
         /// <b>높낮이를 두 벌 들고 있다</b> [고침 2026-10-14]. 지난 구간에서 본 것(Low/High)과
         /// 지금 구간에서 모으고 있는 것(WinLow/WinHigh)이다. 쓸 때는 <b>둘을 합친다.</b>
         ///
@@ -100,7 +105,7 @@ namespace Demo.Player
                 {
                     Low = float.MaxValue, High = float.MinValue,
                     WinLow = float.MaxValue, WinHigh = float.MinValue,
-                    Armed = true,
+                    Armed = false,
                 };
         }
 
@@ -127,18 +132,27 @@ namespace Demo.Player
                     {
                         Low = float.MaxValue, High = float.MinValue,
                         WinLow = float.MaxValue, WinHigh = float.MinValue,
-                        Armed = true,
+                        Armed = false,
                     };
                 return 0;
             }
 
-            float baseY = root.position.y;
             int hits = 0;
 
             for (int i = 0; i < toes.Length; i++)
             {
                 if (toes[i] == null) continue;
-                float y = toes[i].position.y - baseY;
+
+                // <b>월드가 아니라 몸 기준으로 잰다</b> [고침 2026-10-14].
+                //
+                // 월드 y에서 루트 y를 빼는 방식은 바깥 움직임을 그대로 받는다:
+                // CharacterController가 매 프레임 중력으로 눌렀다 떼고(groundStick),
+                // 땅이 기울거나 잔해 위를 걸으면 높이가 변하고, <see cref="PostureFix"/>가
+                // 몸을 기울이면 발의 월드 높이가 또 바뀐다. 착지 문턱이 1cm인데
+                // 그 잡음이 비슷한 크기라 <b>걸음마다 판정이 흔들렸다.</b>
+                //
+                // InverseTransformPoint는 그 전부를 걷어내고 <b>애니메이션이 만든 높이</b>만 남긴다.
+                float y = root.InverseTransformPoint(toes[i].position).y;
 
                 Foot f = feet[i];
 
