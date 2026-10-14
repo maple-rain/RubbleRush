@@ -94,7 +94,7 @@ namespace Demo.Collection
             }
 
             Add(here);
-            TrimToMaxLength(MaxLength(cfg));
+            TrimToMaxLength(MaxLength(cfg) * Core.Upgrades.Mul(Core.Upgrades.CableLength));
 
             if (LoopDetector.TryFindClosure(points, out int start, out Vector2 hit))
                 CloseLoop(cfg, start, hit);
@@ -161,7 +161,11 @@ namespace Demo.Collection
                 if (d != null && !d.IsTowed) loose.Add(d);
             }
 
-            PolygonCapture.SelectInside(polygon, loose, d => d.FlatPosition, captured);
+            // "스치면 잡힘"을 고르면 고리 선이 조각 몸통을 지나기만 해도 잡는다
+            // [지시 2026-10-13]. 여유는 조각마다 자기 반지름에서 나와 크기별로 알아서 맞는다.
+            float grace = Core.Upgrades.Value(Core.Upgrades.LoopGrace, 0f);
+            PolygonCapture.SelectInside(polygon, loose, d => d.FlatPosition, captured,
+                                        grace > 0f ? (d => d.SizeRadius * grace) : (System.Func<Debris, float>)null);
             LastCaptureCount = captured.Count;
 
             if (captured.Count > 0 && cargo != null) cargo.Add(captured);

@@ -103,7 +103,8 @@ namespace Demo.Destruction
 
             for (int attempt = 0; attempt < MaxTries; attempt++)
             {
-                Vector2 offset = Random.insideUnitCircle * data.debrisScatterRadius;
+                Vector2 offset = Random.insideUnitCircle * data.debrisScatterRadius
+                               * Core.Upgrades.Mul(Core.Upgrades.LessScatter);
                 candidate = center + new Vector3(offset.x, 0f, offset.y);
 
                 var flat = new Vector2(candidate.x, candidate.z);

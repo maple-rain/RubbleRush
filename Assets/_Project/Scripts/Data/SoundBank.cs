@@ -98,5 +98,15 @@ namespace Demo.Data
         HoleLevelUp = 21,
         /// <summary>할당량을 채웠다</summary>
         QuotaDone = 22,
+
+        // ── 조작·UI [지시 2026-10-14] ──────────────────────
+        // 반쯤 캐쥬얼로 방향을 잡으며 더했다. 발소리 음원은 2026-10-08부터
+        // 폴더에 있었는데 이 목록에 없어서 한 번도 울리지 않고 있었다.
+        /// <summary>달릴 때의 발소리. 걸은 거리로 터뜨린다</summary>
+        Footstep = 30,
+        /// <summary>업그레이드 카드를 골랐다</summary>
+        UpgradePick = 31,
+        /// <summary>대쉬·케이블 같은 토글 버튼을 눌렀다</summary>
+        UiToggle = 32,
     }
 }

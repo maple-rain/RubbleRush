@@ -82,6 +82,86 @@ namespace Demo.Data
         [Tooltip("최초 위치에서 이만큼 안에서만 떠돈다(m). 구역 밖으로 나가지 않게 한다")]
         public float holeDriftRadius;
 
+        // ── 점수 · 등급 ───────────────────────────────────────────────────────
+        // 전부 [제안·미승인 2026-10-13]. Tools/balance/score_rules.csv · grades.csv가
+        // 이 값들의 기록처다. 0으로 두면 그 항목은 점수에 안 들어간다.
+
+        [Header("점수")]
+        [Tooltip("구멍에 넣은 잔해 1단위당. 할당량까지는 이 값 그대로")]
+        public float pointsPerDebrisUnit;
+
+        [Tooltip("할당량을 넘긴 잔해에 곱하는 배율. 1이면 넘겨도 같은 점수")]
+        public float overQuotaMultiplier;
+
+        [Tooltip("할당량을 채웠을 때 한 번 주는 보너스")]
+        public float quotaBonus;
+
+        [Tooltip("제한 시간이 남은 채로 끝냈을 때 1초당")]
+        public float pointsPerSecondLeft;
+
+        [Tooltip("완전히 부순 건물 한 채당. 안 날라도 부순 것은 친다")]
+        public float pointsPerStructure;
+
+        [Tooltip("끝났을 때 구멍 단계 1당")]
+        public float holeLevelBonus;
+
+        [Header("등급")]
+        [Tooltip("점수 → 등급. 높은 등급을 위에 둔다. 맨 아래 minScore는 0이어야 한다 —\n" +
+                 "어떤 점수든 등급이 나와야 결과 화면이 빈칸이 안 된다")]
+        public Grade[] grades;
+
+        /// <summary>
+        /// 점수 한 구간. <b>별 개수로 쓴다</b> — 결과 화면이 <c>stars</c>만큼 별을 채운다
+        /// [지시 2026-10-13]. <c>label</c>은 별 대신 글자로 보이고 싶을 때 쓴다.
+        /// </summary>
+        [System.Serializable]
+        public sealed class Grade
+        {
+            [Tooltip("이 점수 이상이면 이 등급이다")]
+            public int minScore;
+
+            [Tooltip("채울 별 개수")]
+            public int stars;
+
+            [Tooltip("글자로도 부를 이름 (S/A/B … 또는 우수/양호). 비워도 된다")]
+            public string label;
+        }
+
+        [Header("업그레이드")]
+        [Tooltip("구멍 단계가 오를 때 고르는 카드들 [지시 2026-10-13].\n" +
+                 "같은 단계에 풀리는 카드가 여럿이면 쌓였다가 3장씩 무작위로 뜬다.\n" +
+                 "고르지 않은 카드는 다음 단계에도 다시 나온다")]
+        public Upgrade[] upgrades;
+
+        [Tooltip("한 번에 몇 장을 보여 줄 것인가 [지시 2026-10-13: 3장]")]
+        public int upgradeChoices = 3;
+
+        /// <summary>
+        /// 업그레이드 카드 한 장.
+        ///
+        /// <b><c>id</c>가 코드와 데이터를 잇는 열쇠다.</b> 게임 쪽은 <c>Upgrades.Mul("moveSpeed")</c>
+        /// 처럼 이름으로 묻고, 무엇이 얼마나 오르는지는 전부 이 표에 있다.
+        /// <c>value</c>의 뜻은 id마다 다르다 — 배율인 것도 있고 거리(m)인 것도 있다.
+        /// </summary>
+        [System.Serializable]
+        public sealed class Upgrade
+        {
+            [Tooltip("코드가 찾는 열쇠. 바꾸면 그 카드가 아무 일도 안 한다")]
+            public string id;
+
+            [Tooltip("카드에 크게 뜨는 이름")]
+            public string title;
+
+            [Tooltip("카드에 작게 뜨는 한 줄 설명. 화면에서 뭐가 달라지는지 적는다")]
+            public string detail;
+
+            [Tooltip("구멍이 이 단계가 될 때 후보에 들어온다 (2~6). 화면에 보이는 단계 숫자다")]
+            public int unlockStage;
+
+            [Tooltip("배율 또는 양. 뜻은 id마다 다르다")]
+            public float value = 1f;
+        }
+
         /// <summary>
         /// 구멍 성장 한 단계.
         ///

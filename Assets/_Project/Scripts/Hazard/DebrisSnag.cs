@@ -142,7 +142,8 @@ namespace Demo.Hazard
         /// <returns>걸렸으면 true</returns>
         public bool Check(ref Vector3 position, float radius)
         {
-            if (mode == Response.Pass) return false;
+            // "꽉 쥐기"를 고르면 부딪혀도 아무 일이 없다 [지시 2026-10-13].
+            if (mode == Response.Pass || Core.Upgrades.Has(Core.Upgrades.NoDrop)) return false;
             // <b>첫 고리에 한해서만</b> 면제한다 [지시 2026-10-12].
             // 초로 끊지 않는다 — 티어가 높을수록 토대가 넓어 빠져나오는 데 더 걸리기 때문이다.
             // 짐이 토대를 벗어나는 순간 면제가 끝나고, 거기서부터가 진짜 판정이다.

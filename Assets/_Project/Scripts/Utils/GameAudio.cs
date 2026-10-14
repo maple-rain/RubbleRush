@@ -108,9 +108,24 @@ namespace Demo.Utils
             e.LastAt = now;
 
             float pitch = 1f + Random.Range(-e.pitchJitter, e.pitchJitter);
-            pool.PlayAny(e.clips, at, e.volume * volumeScale * master, pitch, e.flat);
+            // 타격 화면에서는 무조건 플레이어 기준 가운데에서 낸다 [지시 2026-10-14].
+            // 1인칭으로 붙어 치는 화면이라 소리가 좌우로 치우치면 내가 치는 것 같지 않다.
+            bool flat = e.flat || InDemolition();
+            pool.PlayAny(e.clips, at, e.volume * volumeScale * master, pitch, flat);
             PlayedCount++;
         }
+
+        /// <summary>
+        /// 타격 화면인가. 한 번만 찾아 들고 있는다 — 소리마다 Find를 돌릴 수는 없다.
+        /// </summary>
+        bool InDemolition()
+        {
+            if (!lookedForMode) { lookedForMode = true; mode = Core.GameModeController.Instance; }
+            return mode != null && mode.IsDemolition;
+        }
+
+        Core.GameModeController mode;
+        bool lookedForMode;
 
         /// <summary>실측용. 지금 물려 있는 목록.</summary>
         public SoundBank Bank { get => bank; set => bank = value; }

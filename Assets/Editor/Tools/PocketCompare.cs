@@ -53,20 +53,39 @@ namespace Demo.EditorTools
         const float SlotSpacing = 0.9f;  // CargoTow의 출하값
 
         /// <summary>
-        /// 실제 건물 다섯 종류 그대로다 (structures.csv). 꾸며낸 값을 쓰지 않는다.
+        /// 실제 건물 그대로다. 꾸며낸 값을 쓰지 않는다.
         ///
         /// <b>왜 중요한가.</b> 처음엔 전부 반경 0.45로 돌렸는데, 그 값은 slotSpacing 0.9의
         /// 정확히 절반이라 <b>Slots가 자동으로 겹침 0</b>이 된다 — 비교가 한쪽에 유리하게 기운다.
-        /// 진짜 반경은 0.16~1.17로 네 배 넘게 벌어지고, 큰 쪽은 슬롯 간격보다 굵다.
+        /// 진짜 반경은 네 배 넘게 벌어지고, 큰 쪽은 슬롯 간격보다 굵다.
+        ///
+        /// <b>에셋에서 매번 다시 읽는다</b> [고침 2026-10-14]. 전에는 2026-10-08의 값을
+        /// 코드에 박아 뒀는데, 그 뒤 구멍 사다리 작업으로 잔해 크기와 흩어짐이 전부 바뀌었다
+        /// (t1_weak 0.16 -> 0.37m · 흩어짐 1.2 -> 2.0m). 박아 둔 채로 재면 <b>게임과 다른 것을
+        /// 재고도 멀쩡해 보인다</b>. 측정 도구는 반드시 게임이 쓰는 데이터를 읽어야 한다.
         /// </summary>
-        internal static readonly (string name, int count, float radius, float scatter)[] Cases =
+        internal static (string name, int count, float radius, float scatter)[] Cases => LoadCases();
+
+        /// <summary>
+        /// 구역이 실제로 쓰는 종류만 읽는다. 정면도가 없는 것은 이름을 바꾸기 전의
+        /// 중복 에셋이라 뺀다 (structures.csv의 'ㅡ 구역에 한 채도 없는 종류' 다섯).
+        /// 작은 것부터 정렬해 표가 사다리 순서로 나온다.
+        /// </summary>
+        static (string, int, float, float)[] LoadCases()
         {
-            ("t1_weak",   2, 0.16f, 1.2f),
-            ("t2_light",  4, 0.32f, 1.8f),
-            ("t3_normal", 12, 0.50f, 3.5f),
-            ("t4_heavy",  20, 0.77f, 4.2f),
-            ("t5_solid",  32, 1.17f, 8.0f),
-        };
+            var list = new List<(string, int, float, float)>();
+
+            foreach (string guid in AssetDatabase.FindAssets("t:StructureData"))
+            {
+                var d = AssetDatabase.LoadAssetAtPath<Demo.Data.StructureData>(
+                            AssetDatabase.GUIDToAssetPath(guid));
+                if (d == null || d.facadeFront == null) continue;
+                list.Add((d.id, d.debrisCount, d.debrisRadius, d.debrisScatterRadius));
+            }
+
+            list.Sort((a, b) => a.Item3.CompareTo(b.Item3));
+            return list.ToArray();
+        }
 
         internal sealed class Sample
         {
@@ -242,13 +261,56 @@ namespace Demo.EditorTools
             }
         }
 
-        /// <summary>인스펙터 값에 기대지 않는다 — 두 모형이 같은 설정에서 출발해야 한다.</summary>
+        /// <summary>
+        /// <b>씬에 박힌 값을 그대로 복사한다</b> [고침 2026-10-14].
+        ///
+        /// 전에는 <c>mode=Both</c>와 <c>trailDistance=2.5</c>를 여기 박아 두었다.
+        /// "두 모형이 같은 설정에서 출발해야 한다"는 이유였는데, 그러면 <b>씬을 고쳐도
+        /// 측정값이 한 글자도 안 변한다</b> — 실제로 mode를 RopeOnly로 바꾸고 다시 쟀는데
+        /// 일곱 줄이 전부 소수점까지 같아서 들켰다. 게임이 아닌 것을 재고 있었던 것이다.
+        ///
+        /// 비교 축인 <paramref name="shape"/>만 바깥에서 받고 나머지는 씬을 따른다.
+        /// 씬에 CargoTow가 없을 때만 예전 기본값으로 돌아간다.
+        /// </summary>
         static void Configure(CargoTow tow, CargoTow.HaulShape shape)
         {
             var so = new SerializedObject(tow);
-            so.FindProperty("mode").enumValueIndex = (int)CargoTow.PhysicsMode.Both;
+
+            // <b>임시 리그를 씬 것으로 착각하면 안 된다</b> [고침 2026-10-14].
+            // 이 도구가 만드는 오브젝트는 전부 '~'로 시작한다. FindFirstObjectByType은
+            // 그중 하나를 먼저 집을 수 있고, 그러면 복사가 통째로 건너뛰어져
+            // <b>씬을 고쳐도 측정값이 안 변한다</b> — 실제로 두 번 당했다.
+            CargoTow live = null;
+            foreach (var c in Object.FindObjectsByType<CargoTow>(FindObjectsInactive.Include,
+                                                                 FindObjectsSortMode.None))
+            {
+                if (c == null || c == tow) continue;
+                if (c.gameObject.name.StartsWith("~")) continue;
+                live = c;
+                break;
+            }
+
+            if (live != null)
+            {
+                var from = new SerializedObject(live);
+                var it = from.GetIterator();
+                bool go = it.NextVisible(true);
+                while (go)
+                {
+                    // 형제만 훑는다 — net·pocket 같은 묶음은 통째로 복사된다.
+                    if (it.name != "m_Script" && it.name != "shape") so.CopyFromSerializedProperty(it);
+                    go = it.NextVisible(false);
+                }
+                // 씬의 선을 그대로 물고 오면 임시 오브젝트가 화면에 줄을 그린다.
+                so.FindProperty("netLine").objectReferenceValue = null;
+            }
+            else
+            {
+                so.FindProperty("mode").enumValueIndex = (int)CargoTow.PhysicsMode.Both;
+                so.FindProperty("trailDistance").floatValue = 2.5f;
+            }
+
             so.FindProperty("shape").enumValueIndex = (int)shape;
-            so.FindProperty("trailDistance").floatValue = 2.5f;
             so.FindProperty("slotSpacing").floatValue = SlotSpacing;
             so.ApplyModifiedPropertiesWithoutUndo();
 

@@ -49,22 +49,11 @@ namespace Demo.UI
         CargoTow cargo;
 
         GUIStyle big, small;
-        Texture2D px;
 
         void Awake()
         {
             loop = GameLoop.Instance;
             cargo = FindFirstObjectByType<CargoTow>();
-
-            px = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            px.SetPixel(0, 0, Color.white);
-            px.Apply();
-            px.hideFlags = HideFlags.HideAndDontSave;
-        }
-
-        void OnDestroy()
-        {
-            if (px != null) Destroy(px);
         }
 
         void Update()
@@ -77,40 +66,58 @@ namespace Demo.UI
         void OnGUI()
         {
             if (Event.current.type != EventType.Repaint || loop == null) return;
-            if (TitleScreen.Blocking) return;
-            if (big == null) Styles();
+            if (TitleScreen.Blocking || ResultScreen.Blocking || UpgradeScreen.Blocking) return;
+            if (big == null || big.font != UiSkin.Body) Styles();
 
             float h = Screen.height;
             float pad = h * 0.035f;
             float line = h * textFraction;
             float barW = Screen.width * barFraction;
             float barH = h * 0.018f;
+            float gap = h * 0.010f;
 
             big.fontSize = Mathf.RoundToInt(line);
             small.fontSize = Mathf.RoundToInt(line * 0.72f);
 
+            float timeH = line * 1.2f;
+            float pipsH = line * 0.42f;
+            int levels = Levels();
+            bool showPips = hole != null && levels > 0;
+
+            // 판을 먼저 깔아 둔다. 지면이 밝은 자리에서는 글자 그림자만으로 모자란다.
+            float blockH = timeH + gap + line + gap * 0.5f + barH
+                         + (showPips ? gap + pipsH : 0f);
+            UiSkin.Plate(new Rect(pad, pad, barW, blockH), pad * 0.4f);
+
+            float y = pad;
+
             // ── 남은 시간. 유일한 실패 조건이라 제일 크게 ──────────────────────
             bool urgent = loop.TimeRemaining <= urgentSeconds;
-            big.normal.textColor = urgent ? new Color(1f, 0.45f, 0.38f) : Color.white;
+            big.normal.textColor = urgent ? UiSkin.Urgent : UiSkin.Ink;
             string t = Mathf.FloorToInt(loop.TimeRemaining / 60f).ToString("0")
                      + ":" + Mathf.FloorToInt(loop.TimeRemaining % 60f).ToString("00");
-            Shadowed(new Rect(pad, pad, barW, line * 1.2f), t, big);
+            UiSkin.Shadowed(new Rect(pad, y, barW, timeH), t, big);
+            y += timeH + gap;
 
             // ── 할당량. 이 게임의 '퀘스트 진행도'다 ─────────────────────────────
-            float y = pad + line * 1.45f;
-            small.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
-            Shadowed(new Rect(pad, y, barW, line), "할당량  " + loop.Collected + " / " + loop.Quota, small);
+            small.normal.textColor = UiSkin.Ink;
+            UiSkin.Shadowed(new Rect(pad, y, barW, line),
+                            "할당량  " + loop.Collected + " / " + loop.Quota, small);
+            y += line + gap * 0.5f;
 
-            y += line * 1.05f;
-            Bar(new Rect(pad, y, barW, barH), loop.Progress01,
-                new Color(1f, 0.78f, 0.25f, 0.95f));
+            UiSkin.Bar(new Rect(pad, y, barW, barH), loop.Progress01, UiSkin.Accent);
+            y += barH;
 
-            // ── 구멍 단계. 숫자가 아니라 '무엇이 들어가는가'의 표현이다 ────────
-            if (hole != null)
+            // ── 구멍 단계. 숫자보다 칸이 곁눈으로 읽힌다 ───────────────────────
+            if (showPips)
             {
-                y += barH + h * 0.012f;
-                Shadowed(new Rect(pad, y, barW, line), "구멍  " + (hole.Level + 1) + "단계  "
-                         + hole.Radius.ToString("0.0") + "m", small);
+                y += gap;
+                float labelW = barW * 0.44f;
+                small.normal.textColor = UiSkin.InkDim;
+                UiSkin.Shadowed(new Rect(pad, y - line * 0.29f, labelW, line),
+                                "구멍  " + hole.Radius.ToString("0.0") + "m", small);
+                UiSkin.Pips(new Rect(pad + labelW, y, barW - labelW, pipsH),
+                            hole.Level + 1, levels, UiSkin.Accent);
             }
 
             // ── 견인 적재량. 지금 무엇을 끌고 있는가 ────────────────────────────
@@ -118,44 +125,26 @@ namespace Demo.UI
             {
                 float bw = Screen.width * 0.22f;
                 var r = new Rect(Screen.width - pad - bw, pad, bw, line);
+                UiSkin.Plate(r, pad * 0.35f);
+                small.normal.textColor = UiSkin.Ink;
                 small.alignment = TextAnchor.MiddleRight;
-                Shadowed(r, "끄는 중  " + cargo.TotalUnits + "단위", small);
+                UiSkin.Shadowed(r, "끄는 중  " + cargo.TotalUnits + "단위", small);
                 small.alignment = TextAnchor.MiddleLeft;
             }
         }
 
+        /// <summary>구멍 사다리가 몇 칸인가. 칸 표시의 총 개수다.</summary>
+        static int Levels()
+        {
+            var cfg = GameConfigRef.Current;
+            return cfg != null && cfg.holeLevels != null ? cfg.holeLevels.Length : 0;
+        }
+
+        /// <summary>글꼴·색·그리기는 전부 <see cref="UiSkin"/>이 가진다.</summary>
         void Styles()
         {
-            big = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-            };
-            small = new GUIStyle(big) { fontStyle = FontStyle.Normal };
-        }
-
-        /// <summary>
-        /// 글자 뒤에 그림자를 깐다. 지면이 밝아서 흰 글자만 올리면 안 보이는 자리가 생긴다 —
-        /// 배경을 모르는 채로 읽히게 하는 제일 싼 방법이다.
-        /// </summary>
-        void Shadowed(Rect r, string text, GUIStyle s)
-        {
-            Color keep = s.normal.textColor;
-            s.normal.textColor = new Color(0f, 0f, 0f, 0.55f);
-            GUI.Label(new Rect(r.x + 2f, r.y + 2f, r.width, r.height), text, s);
-            s.normal.textColor = keep;
-            GUI.Label(r, text, s);
-        }
-
-        void Bar(Rect r, float fill01, Color color)
-        {
-            Color prev = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.45f);
-            GUI.DrawTexture(r, px);
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(r.x, r.y, r.width * Mathf.Clamp01(fill01), r.height), px);
-            GUI.color = prev;
+            big = UiSkin.Label(true, TextAnchor.MiddleLeft);
+            small = UiSkin.Label(false, TextAnchor.MiddleLeft);
         }
     }
 }

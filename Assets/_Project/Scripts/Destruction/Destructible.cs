@@ -216,6 +216,10 @@ namespace Demo.Destruction
             {
                 rubbleSince = Time.time;
 
+                // 결과 화면이 "몇 채를 부쉈나"를 센다. 전이가 한 번뿐이라 여기가 맞는 자리다.
+                Core.GameLoop loop = Core.GameLoop.Instance;
+                if (loop != null) loop.NotifyBroken();
+
                 // 케이블 차단 판정은 콜라이더와 별개로 산다 — CableOnly에서는 콜라이더가 꺼져 있다.
                 FoundationFootprint(out Vector3 c, out float hx, out float hz);
                 Hazard.ObstacleField.AddFoundation(c, hx, hz, transform.eulerAngles.y);
@@ -264,7 +268,7 @@ namespace Demo.Destruction
                     return true;
                 case GameConfig.FoundationRule.Decay:
                     return rubbleSince >= 0f &&
-                           (Time.time - rubbleSince) < cfg.foundationDecaySeconds;
+                           (Time.time - rubbleSince) < (cfg.foundationDecaySeconds * Core.Upgrades.Mul(Core.Upgrades.QuickFoundation));
                 default:
                     return false;      // None · CableOnly — 걸어서는 지나간다
             }
@@ -284,7 +288,7 @@ namespace Demo.Destruction
             GameConfig cfg = GameConfigRef.Current;
             if (cfg == null || cfg.foundationRule != GameConfig.FoundationRule.Decay) return;
 
-            if ((Time.time - rubbleSince) >= cfg.foundationDecaySeconds) box.enabled = false;
+            if ((Time.time - rubbleSince) >= (cfg.foundationDecaySeconds * Core.Upgrades.Mul(Core.Upgrades.QuickFoundation))) box.enabled = false;
         }
     }
 }

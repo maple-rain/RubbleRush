@@ -91,13 +91,50 @@ namespace Demo.Collection
         }
 
         /// <summary>
+        /// 점에서 폴리곤 <b>테두리</b>까지의 최단 거리(m). 안에 있어도 양수다.
+        ///
+        /// "케이블이 잔해 몸통을 지나갔는가"를 묻는 데 쓴다 — 그 거리가 조각의 반지름보다
+        /// 가까우면 선이 조각을 가로지른 것이다.
+        /// </summary>
+        public static float DistanceToEdge(IReadOnlyList<Vector2> polygon, Vector2 p)
+        {
+            int n = polygon.Count;
+            if (n < 2) return float.MaxValue;
+
+            float best = float.MaxValue;
+            for (int i = 0, j = n - 1; i < n; j = i++)
+            {
+                float d = PointToSegment(p, polygon[j], polygon[i]);
+                if (d < best) best = d;
+            }
+            return best;
+        }
+
+        /// <summary>점에서 선분까지의 거리. 발이 선분 밖으로 떨어지면 끝점까지의 거리다.</summary>
+        static float PointToSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float len2 = ab.sqrMagnitude;
+            if (len2 < 0.000001f) return Vector2.Distance(p, a);
+
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / len2);
+            return Vector2.Distance(p, a + ab * t);
+        }
+
+        /// <summary>
         /// 고리 안의 잔해를 골라 outCaptured에 담는다. 폐합 순간 1회.
         /// 바운딩 박스로 먼저 쳐내고 남은 것만 ray casting한다.
         /// </summary>
+        /// <param name="graceOf">
+        /// 조각마다의 <b>여유 거리</b>(m). 중심이 고리 밖이어도 테두리까지의 거리가
+        /// 이보다 가까우면 잡은 것으로 친다 — "스치기만 해도 잡힌다" 업그레이드다
+        /// [지시 2026-10-13]. null이거나 0이면 예전 그대로 중심만 본다.
+        /// </param>
         public static void SelectInside<T>(IReadOnlyList<Vector2> polygon,
                                            IReadOnlyList<T> candidates,
                                            System.Func<T, Vector2> positionOf,
-                                           List<T> outCaptured)
+                                           List<T> outCaptured,
+                                           System.Func<T, float> graceOf = null)
         {
             outCaptured.Clear();
             if (polygon.Count < 3) return;
@@ -106,9 +143,15 @@ namespace Demo.Collection
 
             for (int i = 0; i < candidates.Count; i++)
             {
-                Vector2 p = positionOf(candidates[i]);
-                if (p.x < min.x || p.x > max.x || p.y < min.y || p.y > max.y) continue;
-                if (Contains(polygon, p)) outCaptured.Add(candidates[i]);
+                T item = candidates[i];
+                Vector2 p = positionOf(item);
+                float g = graceOf != null ? Mathf.Max(0f, graceOf(item)) : 0f;
+
+                // 여유만큼 상자를 넓혀서 쳐낸다 — 안 넓히면 스치는 조각이 여기서 잘린다.
+                if (p.x < min.x - g || p.x > max.x + g || p.y < min.y - g || p.y > max.y + g) continue;
+
+                if (Contains(polygon, p)) { outCaptured.Add(item); continue; }
+                if (g > 0f && DistanceToEdge(polygon, p) <= g) outCaptured.Add(item);
             }
         }
     }

@@ -32,10 +32,16 @@ namespace Demo.EditorTools
     public static class HoleLadder
     {
         /// <summary>
-        /// 제일 작은 조각의 반경(m) [제안·미승인]. 화면에서 1m가 117px이므로 0.37m면 약 43px이다 —
-        /// 0.16m(19px)이 "작아서 안 보인다"는 지적에서 역산했고, 여기에 10%를 더한 값이다.
+        /// 제일 작은 조각의 반경(m).
+        ///
+        /// 0.16m(화면 19px)이 "작아서 안 보인다"는 지적에서 역산해 0.37m로 올렸고,
+        /// <b>2026-10-14 지시로 다시 22% 올렸다</b> — 그래도 안 보인다는 판단이다.
+        /// 화면에서 1m가 117px이므로 0.45m면 약 53px이다.
+        ///
+        /// <b>여기가 잔해 크기의 진짜 출처다.</b> StructureData에 손으로 써도
+        /// 이 도구를 돌리면 이 값으로 다시 깔린다 — 바꾸려면 여기를 바꿔야 한다.
         /// </summary>
-        const float FloorRadius = 0.37f;
+        const float FloorRadius = 0.45f;
 
         /// <summary>
         /// 제일 큰 조각의 반경(m) [지시 2026-10-12 +10%].
@@ -52,8 +58,25 @@ namespace Demo.EditorTools
         // 보고 정해야 하므로, 여기서 비율로 밀면 반드시 어긋난다.
         // 이 도구는 이제 흩어짐을 읽어서 케이블 길이만 끌어낸다.
 
-        /// <summary>고리가 완벽한 원이 아니고 거기까지 걸어가야 하므로 두는 여유. 20% [지시 2026-10-12].</summary>
-        const float LoopMargin = 1.20f;
+        /// <summary>
+        /// 고리가 완벽한 원이 아니고 거기까지 걸어가야 하므로 두는 여유.
+        ///
+        /// <b>단계가 오를수록 줄어든다</b> [지시 2026-10-14]. 전에는 모든 단계에 20% 고정이었다.
+        /// 1단계는 넉넉해서 처음 배우는 동안 고리가 잘 닫히고, 뒤로 갈수록 빠듯해져
+        /// <b>"긴 로프" 업그레이드의 값어치가 올라간다</b>. 여유가 모자라도 막히지는 않는다 —
+        /// 두세 번에 나눠 감으면 되고, 그게 느려지는 것이 곧 카드의 가치다.
+        ///
+        /// 두 값은 [제안·미승인 2026-10-14]. 사이는 단계 수로 고르게 나눈다.
+        /// </summary>
+        const float MarginFirst = 1.35f;   // 1단계 — 35% 여유
+        const float MarginLast = 1.05f;    // 마지막 단계 — 5% 여유
+
+        /// <summary>L단계(0부터)의 고리 여유. 칸이 하나뿐이면 첫 값을 쓴다.</summary>
+        static float LoopMarginAt(int level, int levels)
+        {
+            if (levels <= 1) return MarginFirst;
+            return Mathf.Lerp(MarginFirst, MarginLast, (float)level / (levels - 1));
+        }
 
         sealed class Kind
         {
@@ -88,7 +111,7 @@ namespace Demo.EditorTools
 
             sb.AppendLine();
             sb.AppendLine("  규칙대로  (잔해 " + FloorRadius + "~" + TopRadius
-                          + "m · 고리 여유 x" + LoopMargin + ")");
+                          + "m · 고리 여유 x" + MarginFirst + " -> x" + MarginLast + ")");
             sb.Append(Table(want, holes, cables));
 
             if (!write)
@@ -194,7 +217,7 @@ namespace Demo.EditorTools
                 foreach (Kind k in kinds)
                     if (Mathf.Approximately(k.radius, s[i])) widest = Mathf.Max(widest, k.scatter);
 
-                float need = 2f * Mathf.PI * widest * LoopMargin;
+                float need = 2f * Mathf.PI * widest * LoopMarginAt(i, s.Count);
                 running = Mathf.Max(running, need);
                 c[i] = Mathf.Round(running * 10f) / 10f;
             }

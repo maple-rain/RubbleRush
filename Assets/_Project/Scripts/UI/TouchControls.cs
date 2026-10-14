@@ -68,7 +68,9 @@ namespace Demo.UI
         {
             get
             {
-                if (TitleScreen.Blocking) return false;
+                // 화면을 덮는 창이 떠 있으면 그리지도 받지도 않는다 [지시 2026-10-14].
+                // 업그레이드 카드 위로 대쉬·케이블 단추가 겹쳐 보였다.
+                if (TitleScreen.Blocking || ResultScreen.Blocking || UpgradeScreen.Blocking) return false;
                 if (mode == null) mode = Core.GameModeController.Instance;
                 return mode == null || mode.IsField;
             }

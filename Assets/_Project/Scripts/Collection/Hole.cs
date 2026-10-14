@@ -56,6 +56,7 @@ namespace Demo.Collection
         {
             Level = 0;
             Xp = 0;
+            xpCarry = 0f;
             SwallowedUnits = 0;
             origin = transform.position;
             driftTarget = origin;
@@ -71,10 +72,29 @@ namespace Demo.Collection
         /// </summary>
         void Drift(GameConfig cfg)
         {
-            if (!IsMaxLevel || cfg.holeDriftSpeed <= 0f) return;
+            if (cfg.holeDriftSpeed <= 0f) return;
+
+            // "따라오는 구멍"을 고르면 최종 단계가 아니어도 움직인다 [지시 2026-10-13].
+            bool follows = Core.Upgrades.Has(Core.Upgrades.HoleFollows);
+            if (!follows && !IsMaxLevel) return;
 
             Vector3 here = transform.position;
-            if ((driftTarget - here).sqrMagnitude < 0.25f)
+
+            if (follows)
+            {
+                Transform p = Player();
+                if (p != null)
+                {
+                    // 쫓아가되 구역 밖으로는 안 나간다 — 최초 위치 반경 제한은 그대로다.
+                    Vector3 want = new Vector3(p.position.x, here.y, p.position.z);
+                    Vector3 off = want - origin;
+                    off.y = 0f;
+                    float lim = cfg.holeDriftRadius;
+                    if (off.sqrMagnitude > lim * lim) off = off.normalized * lim;
+                    driftTarget = new Vector3(origin.x + off.x, here.y, origin.z + off.z);
+                }
+            }
+            else if ((driftTarget - here).sqrMagnitude < 0.25f)
             {
                 Vector2 r = Random.insideUnitCircle * cfg.holeDriftRadius;
                 driftTarget = origin + new Vector3(r.x, 0f, r.y);
@@ -83,6 +103,23 @@ namespace Demo.Collection
             transform.position = Vector3.MoveTowards(here, driftTarget,
                                                      cfg.holeDriftSpeed * Time.deltaTime);
         }
+
+        /// <summary>
+        /// 쫓아갈 대상. <b>한 번만 찾는다</b> — Update에서 Find를 도는 것은 금지다
+        /// (CLAUDE.md 규칙 5). 구멍은 구역이 지어질 때 생기고 플레이어는 그 전에
+        /// 있으므로 처음 필요해질 때 한 번이면 충분하다.
+        /// </summary>
+        Transform Player()
+        {
+            if (lookedForPlayer) return playerT;
+            lookedForPlayer = true;
+            var pc = FindFirstObjectByType<Demo.Player.PlayerController>();
+            playerT = pc != null ? pc.transform : null;
+            return playerT;
+        }
+
+        Transform playerT;
+        bool lookedForPlayer;
 
         void ApplyLevel()
         {
@@ -127,8 +164,39 @@ namespace Demo.Collection
                 Debug.Log($"[Hole] 구멍이 커졌다 — 단계 {Level} · 반경 {Radius:0.0}m" +
                           (IsMaxLevel ? " (최종)" : $" · 다음까지 {XpToNext - Xp}"));
 
+            if (grew) OfferUpgrade();
             return grew;
         }
+
+        /// <summary>
+        /// 단계가 오르면 업그레이드 카드를 내민다 [지시 2026-10-13].
+        /// 한 번에 두 칸이 올라도 카드는 한 번만 뜬다 — 후보는 어차피 누적이다.
+        /// </summary>
+        void OfferUpgrade()
+        {
+            if (!lookedForPicker) { lookedForPicker = true; picker = FindFirstObjectByType<UI.UpgradeScreen>(); }
+            if (picker != null) picker.Offer(Level + 1);   // 화면에 보이는 단계 숫자
+        }
+
+        UI.UpgradeScreen picker;
+        bool lookedForPicker;
+
+        /// <summary>
+        /// 경험치에 배율을 먹인다. <b>소수점을 모아 둔다</b> —
+        /// 잔해 하나가 주는 경험치가 1이라, 1.5배를 넣을 때마다 반올림하면
+        /// 매번 2가 되어 실제로는 2배가 된다 [실측 2026-10-13].
+        /// </summary>
+        void AddXpScaled(int raw)
+        {
+            if (raw <= 0) return;
+            xpCarry += raw * Core.Upgrades.Mul(Core.Upgrades.MoreXp);
+            int whole = Mathf.FloorToInt(xpCarry);
+            if (whole <= 0) return;
+            xpCarry -= whole;
+            AddXp(whole);
+        }
+
+        float xpCarry;
 
         /// <summary>디버그·시연용. 한 단계 즉시 올린다.</summary>
         public bool ForceLevelUp()
@@ -165,7 +233,8 @@ namespace Demo.Collection
 
             // 흡인 범위 — 여기 들어오면 알아서 빨려든다. 조준할 필요가 없다.
             // 판정 주체는 여전히 잔해지만, 구멍 위에 정확히 올려놓을 것을 요구하지는 않는다.
-            float reach = Radius + cfg.holeSuctionMargin;
+            float margin = cfg.holeSuctionMargin * Core.Upgrades.Mul(Core.Upgrades.WiderSuction);
+            float reach = Radius + margin;
             float reachSqr = reach * reach;
 
             // 뒤에서부터 훑는다 — 낙하가 시작되면 목록이 바뀔 수 있다.
@@ -181,7 +250,7 @@ namespace Demo.Collection
                 if (sqr <= rSqr) { Swallow(d, cfg, loop); continue; }   // 구멍 안 — 삼킨다
                 if (sqr > reachSqr) { d.IsBeingSucked = false; continue; }
 
-                Pull(d, cfg);   // 범위 안 — 끌어당긴다
+                Pull(d, cfg, margin);   // 범위 안 — 끌어당긴다
             }
         }
 
@@ -191,7 +260,7 @@ namespace Demo.Collection
         /// 가까울수록 세게 당긴다 — 범위 가장자리에서는 살짝, 구멍 바로 옆에서는 확 빨려든다.
         /// 균일하게 당기면 멀리서부터 질질 끌려와 "빨려드는" 느낌이 안 난다.
         /// </summary>
-        void Pull(Debris d, GameConfig cfg)
+        void Pull(Debris d, GameConfig cfg, float margin)
         {
             d.IsBeingSucked = true;
 
@@ -199,7 +268,7 @@ namespace Demo.Collection
             Vector3 to = new Vector3(transform.position.x, here.y, transform.position.z);
 
             float dist = Vector3.Distance(here, to);
-            float closeness = 1f - Mathf.Clamp01((dist - Radius) / Mathf.Max(0.01f, cfg.holeSuctionMargin));
+            float closeness = 1f - Mathf.Clamp01((dist - Radius) / Mathf.Max(0.01f, margin));
 
             float speed = cfg.holeSuctionSpeed * Mathf.Lerp(0.25f, 1f, closeness);
             d.transform.position = Vector3.MoveTowards(here, to, speed * Time.deltaTime);
@@ -220,7 +289,7 @@ namespace Demo.Collection
 
             SwallowedUnits += units;
             loop.AddCollected(units);
-            AddXp(units * cfg.xpPerDebrisUnit);
+            AddXpScaled(units * cfg.xpPerDebrisUnit);
         }
 
         void OnFallFinished(Debris d)

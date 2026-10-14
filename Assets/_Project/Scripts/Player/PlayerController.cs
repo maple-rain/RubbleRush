@@ -19,6 +19,10 @@ namespace Demo.Player
         [SerializeField, Tooltip("접지 유지용 하강 가속. 낙하 연출용이 아니다")]
         float groundStick = 20f;
 
+        [SerializeField, Range(0.5f, 6f), Tooltip("발소리 한 번 사이에 걷는 거리(m) [제안·미승인].\n" +
+                 "3m 로봇의 보폭에서 잡았다. 작으면 종종거리고, 크면 미끄러져 보인다")]
+        float stepDistance = 2.2f;
+
         [Header("연결 — 같은 오브젝트에 있으면 Awake가 알아서 잡는다")]
         [SerializeField] InputRouter input;
         [SerializeField] Collection.CargoTow cargo;
@@ -30,7 +34,6 @@ namespace Demo.Player
         float baseStepOffset;
         float verticalVelocity;
         float stunRemaining;
-        bool warnedPlaceholder;
 
         /// <summary>조이스틱/WASD 입력. InputRouter가 매 프레임 넣는다. 크기 0~1.</summary>
         public Vector2 MoveInput { get; set; }
@@ -101,7 +104,7 @@ namespace Demo.Player
             GameConfig cfg = GameConfigRef.Current;
             if (cfg == null) return;
 
-            TopSpeed = cfg.moveSpeedBase;
+            TopSpeed = cfg.moveSpeedBase * Core.Upgrades.Mul(Core.Upgrades.MoveSpeed);
             IsRunning = input != null && input.RunActive;
 
             // 11번 Platform이면 토대(높이 0.40)에 올라설 수 있어야 한다.
@@ -142,7 +145,32 @@ namespace Demo.Player
             Vector3 motion = dir * (CurrentSpeed * dt);
             motion.y = verticalVelocity * dt;
             cc.Move(motion);
+
+            Footsteps(dt);
         }
+
+        /// <summary>
+        /// 발소리 [지시 2026-10-14].
+        ///
+        /// <b>시간이 아니라 걸은 거리로 낸다.</b> 초로 내면 걷기와 달리기에서 보폭이 달라져
+        /// 발이 미끄러져 보인다. 애니메이션 이벤트로 심는 길도 있지만 클립마다 다시 심어야 하고,
+        /// 업그레이드로 속도가 바뀌면 또 어긋난다.
+        ///
+        /// 음원은 2026-10-08부터 폴더에 있었는데 <see cref="Demo.Data.Sfx"/> 목록에 없어서
+        /// 한 번도 울리지 않고 있었다.
+        /// </summary>
+        void Footsteps(float dt)
+        {
+            if (!cc.isGrounded || CurrentSpeed < 0.2f) { stepLeft = stepDistance * 0.4f; return; }
+
+            stepLeft -= CurrentSpeed * dt;
+            if (stepLeft > 0f) return;
+
+            stepLeft = stepDistance;
+            Utils.GameAudio.Play(Data.Sfx.Footstep, transform.position);
+        }
+
+        float stepLeft;
 
         void ApplyGravityOnly(float dt)
         {
@@ -158,48 +186,25 @@ namespace Demo.Player
                 transform.rotation, target, turnSpeedDegrees * dt);
         }
 
-        // ──────────────────────────────────────────────────────────────────────
-        // TODO(기획자) — 견인량이 속도를 깎는 곡선
-        //
-        // 이 게임의 핵심 딜레마가 이 함수 하나에 들어간다 (GAME_DESIGN §1):
-        //   "크게 갈 것인가, 빠르게 갈 것인가."
-        // 많이 끌수록 느려지고, 느릴수록 붕괴에서 못 빠져나온다. 곡선의 모양이
-        // 플레이어가 "한 번에 몰아서 나를지, 조금씩 자주 나를지"를 결정한다.
-        //
-        // GameConfig가 가진 재료: moveSpeedBase, speedPenaltyPerUnit, moveSpeedMin
-        // (값은 아직 비어 있다. 곡선의 모양과 값은 둘 다 기획자 몫이다.)
-        //
-        // 후보 세 가지:
-        //   ① 선형 + 하한   max(min, base − penalty × load)
-        //      1단위의 무게가 처음과 끝이 같다. TECH_SPEC 초안이 쓴 형태이고 제일 읽기 쉽다.
-        //      대신 하한에 닿는 순간부터 더 실어도 공짜라서, 후반에 무한정 쌓는 게 최적이 된다.
-        //
-        //   ② 체감(遞減)     base − penalty × sqrt(load) 류
-        //      많이 끌수록 추가 1단위가 덜 아프다 → 대량 수집을 장려한다.
-        //      "몰아서 부수고 한 번에 크게 둘러싸기"를 고급 플레이로 만들고 싶으면 이쪽.
-        //
-        //   ③ 체증(遞增)     base − penalty × load² 류
-        //      많이 끌수록 추가 1단위가 더 아프다 → 적정선에서 끊고 나르게 만든다.
-        //      왕복이 늘어 지루해질 위험이 있지만, 구멍을 여러 개 둔 설계와는 잘 맞는다.
-        //
-        // 어느 쪽이든 5~8줄이면 끝난다. 정하고 나면 balance_sim.py의 spd()도 같은 모양으로 맞춰야
-        // D16 시뮬레이션이 실제 게임과 같은 것을 재게 된다.
-        // ──────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// 이동 속도. <b>견인량은 속도를 깎지 않는다</b> [확정 2026-10-13].
+        ///
+        /// 오래 비어 있던 자리다. 원래는 "크게 갈 것인가, 빠르게 갈 것인가"를 만드는
+        /// 감속 곡선을 넣을 예정이었고, 선형·체감·체증 세 안을 올렸다.
+        /// 기획자가 <b>감속을 하지 않기로</b> 정했다 — 얼마를 끌든 같은 속도다.
+        /// 그래서 <c>speedPenaltyPerUnit</c>과 <c>moveSpeedMin</c>은 쓰이지 않는다.
+        ///
+        /// 속도의 차이는 대신 <b>업그레이드</b>가 만든다 — 구멍 단계가 오를 때 고르는
+        /// "더 빠르게" 카드다 (<see cref="Core.Upgrades"/>).
+        /// </summary>
         float ComputeMoveSpeed(GameConfig cfg, int towLoad, bool running)
         {
-            if (!warnedPlaceholder)
-            {
-                warnedPlaceholder = true;
-                Debug.LogWarning("[PlayerController] 견인 감속 곡선이 아직 비어 있다 — " +
-                                 "지금은 얼마를 끌어도 속도가 안 줄어든다. " +
-                                 "ComputeMoveSpeed()의 TODO 참조.", this);
-            }
-
             // 걷기 속도가 아직 안 채워졌으면 달리기 속도를 그대로 쓴다.
             // 0을 돌려주면 걷기 토글이 "못 움직임"이 되어 버그로 보인다 —
             // Validate()가 미입력을 따로 잡아 주므로 여기서는 굴러가게만 한다.
-            if (!running && cfg.walkSpeedBase > 0f) return cfg.walkSpeedBase;
-            return cfg.moveSpeedBase;
+            float baseSpeed = (!running && cfg.walkSpeedBase > 0f)
+                            ? cfg.walkSpeedBase : cfg.moveSpeedBase;
+            return baseSpeed * Core.Upgrades.Mul(Core.Upgrades.MoveSpeed);
         }
     }
 }

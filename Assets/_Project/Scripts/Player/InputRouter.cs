@@ -234,6 +234,7 @@ namespace Demo.Player
             if (ActionPressedThisFrame)
             {
                 ActionActive = !ActionActive;
+                Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
                 StrikeRightArm = injected ?? DecideStrikeSide();
             }
 
@@ -241,7 +242,11 @@ namespace Demo.Player
             InteractPressedThisFrame = Edge(InteractOverride, ref interactHeldLast, interactAction);
 
             // 달리기도 같은 토글 방식. 가상 버튼이 있으면 그 쪽의 누르는 순간을 쓴다.
-            if (Edge(RunOverride, ref runHeldLast, runAction)) RunActive = !RunActive;
+            if (Edge(RunOverride, ref runHeldLast, runAction))
+            {
+                RunActive = !RunActive;
+                Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
+            }
         }
 
         /// <summary>

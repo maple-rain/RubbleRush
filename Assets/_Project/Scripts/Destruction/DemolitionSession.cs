@@ -157,7 +157,9 @@ namespace Demo.Destruction
             // 탭 하나가 올리는 양은 breakTime에서 유도한다 —
             // '몇 초 걸리는가'는 기획자가 채운 값이고, '초당 몇 번 두드리는가'는 손의 특성이라
             // 대상별이 아니라 전역이다. 새 수치는 tapsPerSecond 하나만 늘어난다.
-            float taps = Mathf.Max(1f, Target.Data.breakTime * cfg.tapsPerSecond);
+            // "두 배로 부수기"는 필요 타수를 줄인다 [지시 2026-10-13].
+            float taps = Mathf.Max(1f, Target.Data.breakTime * cfg.tapsPerSecond
+                                     * Core.Upgrades.Mul(Core.Upgrades.FastBreak));
             float before = Gauge;
 
             // <b>세어서 나눈다. 더해서 쌓지 않는다.</b>

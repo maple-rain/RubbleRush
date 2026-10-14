@@ -259,6 +259,59 @@ def quota_done(v):
     return pad
 
 
+def upgrade_pick(v):
+    """업그레이드를 골랐다 [지시 2026-10-14].
+
+    반쯤 캐쥬얼한 장르로 간다고 했으므로 밝고 짧게 간다 — 완전5도 두 음이
+    빠르게 올라가고 위에 반짝이는 고역을 얹는다. 길게 끌면 다음 행동이 늦어진다.
+    """
+    d = 0.40
+    n = int(SR * d)
+    out = np.zeros(n)
+
+    root = 523 * (1.0 + 0.06 * v)                # 변형마다 조를 조금 옮긴다
+    for i, mul in enumerate([1.0, 1.5]):         # 완전5도 — 제일 단순한 '됐다'
+        seg = np.sin(2 * np.pi * root * mul * t(d)) * np.exp(-7.0 * t(d))
+        mix(out, seg * (0.60 - 0.15 * i), at=0.07 * i)
+
+    spark = highpass_fast(noise(0.12), 4000) * env(int(SR * 0.12), 0.002, 0.08, 3.0)
+    mix(out, spark * 0.25, at=0.02)
+    return out
+
+
+def footstep(v):
+    """달릴 때의 발소리 [지시 2026-10-14].
+
+    3m짜리 로봇이라 묵직한 저역이 먼저 오고 금속 부품이 뒤따라 흔들린다.
+    <b>변형을 넉넉히 둔다</b> — 1초에 두세 번 나는 소리라 같은 것이 반복되면 바로 거슬린다.
+    """
+    d = 0.18
+    n = int(SR * d)
+    out = np.zeros(n)
+
+    mix(out, thump(0.14, 120 + 25 * v, 55, 0.9) * 0.85)
+    mix(out, rubble(0.10, density=70, size=0.015, cutoff=5000) * 0.35, at=0.005)
+    mix(out, ring(0.12, [1800 + 300 * v, 3100], decay=22.0) * 0.18, at=0.01)
+    return out
+
+
+def ui_toggle(v):
+    """버튼을 켜고 끈다 [지시 2026-10-14].
+
+    아주 짧은 '뽁' 하나다. 길면 조작이 굼떠 보인다 — 누른 즉시 끝나야 한다.
+    켤 때와 끌 때는 변형 둘로 높낮이를 갈라 둔다.
+    """
+    d = 0.09
+    n = int(SR * d)
+    tt = t(d)
+
+    f0 = 900 + 500 * v
+    out = np.sin(2 * np.pi * f0 * np.exp(-6.0 * tt) * tt) * env(n, 0.001, 0.05, 4.0)
+    tick = highpass_fast(noise(0.03), 3000) * env(int(SR * 0.03), 0.001, 0.02, 3.0)
+    mix(out, tick * 0.30)
+    return out
+
+
 RECIPES = {
     'Punch': (punch, 3),
     'CableOpen': (cable_open, 2),
@@ -269,6 +322,11 @@ RECIPES = {
     'Swallow': (swallow, 3),
     'HoleLevelUp': (hole_level_up, 2),
     'QuotaDone': (quota_done, 2),
+
+    # ── 반쯤 캐쥬얼로 방향을 잡으며 더한 것 [지시 2026-10-14] ──
+    'UpgradePick': (upgrade_pick, 2),
+    'Footstep': (footstep, 3),   # 01~03은 이미 있다 — 이 레시피는 비상용이다
+    'UiToggle': (ui_toggle, 2),
 }
 
 
