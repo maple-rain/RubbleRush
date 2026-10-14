@@ -61,6 +61,53 @@ namespace Demo.UI
             return hole = loop != null ? loop.ActiveHole : null;
         }
 
+        /// <summary>
+        /// 구멍이 <b>어디로 가는지</b> 바닥에 표시한다 [지시 2026-10-14].
+        ///
+        /// <b>왜 필요한가.</b> 구멍은 최종 단계가 되면 스스로 떠도는데 목적지가 무작위다.
+        /// 속도를 1.2에서 4m/s로 올리고 나니 "어디로 갈지 예측이 안 된다"가 더 커졌다.
+        /// 지금 어디 있는지(화살표)만으로는 짐을 안고 마중 나갈 수가 없다.
+        ///
+        /// <b>따라오는 카드를 골랐으면 안 그린다.</b> 그때 목적지는 나 자신이라
+        /// 표시가 늘 발밑에 붙어 시야만 가린다.
+        ///
+        /// 원은 점 여덟 개로 그린다 — 원형 텍스처를 따로 만들 만한 일이 아니다.
+        /// </summary>
+        void DriftHint(Vector3 holeScreen)
+        {
+            if (!hole.IsDrifting) return;
+            if (Core.Upgrades.Has(Core.Upgrades.HoleFollows)) return;
+
+            Vector3 t = cam.WorldToScreenPoint(hole.DriftTarget);
+            if (t.z <= 0f) return;                       // 카메라 뒤 — 그릴 자리가 없다
+
+            Vector2 to = new Vector2(t.x, Screen.height - t.y);
+            float ring = Screen.height * 0.022f;
+            float dot = Mathf.Max(2f, Screen.height * 0.004f);
+
+            // 구멍에서 목적지까지 점선 — '여기서 저기로'가 선으로 읽힌다
+            if (holeScreen.z > 0f)
+            {
+                Vector2 from = new Vector2(holeScreen.x, Screen.height - holeScreen.y);
+                float span = Vector2.Distance(from, to);
+                int steps = Mathf.Clamp(Mathf.RoundToInt(span / (dot * 5f)), 0, 40);
+                for (int i = 1; i < steps; i++)
+                {
+                    Vector2 p = Vector2.Lerp(from, to, i / (float)steps);
+                    UiSkin.Fill(new Rect(p.x - dot * 0.5f, p.y - dot * 0.5f, dot, dot),
+                                new Color(1f, 1f, 1f, 0.22f));
+                }
+            }
+
+            // 목적지 원
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * Mathf.PI * 0.25f;
+                var p = new Vector2(to.x + Mathf.Cos(a) * ring, to.y + Mathf.Sin(a) * ring);
+                UiSkin.Fill(new Rect(p.x - dot, p.y - dot, dot * 2f, dot * 2f), UiSkin.Accent);
+            }
+        }
+
         bool ShouldDraw()
         {
             if (arrow == null || cam == null) return false;
@@ -80,6 +127,8 @@ namespace Demo.UI
 
             Vector3 world = hole.transform.position;
             Vector3 sp = cam.WorldToScreenPoint(world);
+
+            DriftHint(sp);
 
             // 카메라 뒤에 있으면 WorldToScreenPoint가 중심 대칭으로 뒤집힌 점을 준다.
             // 그 점의 위치는 의미가 없다 — 쓸 수 있는 것은 방향뿐이고, 그마저 뒤집어야 한다.

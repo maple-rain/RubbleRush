@@ -165,6 +165,48 @@ namespace Demo.Destruction
             // 박자를 셋으로 나눈 이유(위 표)가 소리에도 그대로 적용된다.
             Utils.GameAudio.Play(Data.Sfx.Strike, point,
                                  Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(progress01)));
+
+            // "두 배로 부수기"를 고르면 <b>보이지 않는 두 번째 팔</b>이 한 박자 늦게 한 대 더 친다
+            // [지시 2026-10-14, 죠죠의 스탠드]. 지금은 소리와 충격만이다 — 팔을 실제로
+            // 띄우려면 로봇 비주얼을 한 벌 더 돌려야 해서 따로 잡아야 한다.
+            //
+            // <b>왜 필요한가.</b> 이 업그레이드는 필요 타수를 반으로 줄이는데, 그게 화면에
+            // 아무 흔적도 안 남긴다 — 고르고 나서 "뭐가 달라졌지"가 된다. 한 대가 더
+            // 들어가는 소리가 나면 그때부터 눈에 보이는 능력이 된다.
+            if (Core.Upgrades.Has(Core.Upgrades.FastBreak))
+            {
+                standLeft = standDelay;
+                standAt = point;
+                standVolume = Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(progress01)) * standVolumeShare;
+            }
+        }
+
+        [SerializeField, Range(0.03f, 0.25f), Tooltip("두 번째 팔이 늦게 치는 간격(초) [제안·미승인].\n" +
+                 "너무 짧으면 한 소리로 뭉치고, 길면 따로 노는 소리가 된다")]
+        float standDelay = 0.075f;
+
+        [SerializeField, Range(0.2f, 1f), Tooltip("두 번째 타격의 음량 비율. 본 타격보다 작아야 " +
+                 "'뒤따라온 것'으로 들린다")]
+        float standVolumeShare = 0.75f;
+
+        float standLeft;
+        float standVolume;
+        Vector3 standAt;
+
+        /// <summary>
+        /// 늦게 치는 두 번째 팔. 코루틴을 안 쓴다 — 한 프레임에 두 번 예약될 수 있고
+        /// 그때마다 코루틴을 새로 띄우면 소리가 겹쳐 울린다.
+        /// </summary>
+        void LateUpdate()
+        {
+            if (standLeft <= 0f) return;
+
+            standLeft -= Time.unscaledDeltaTime;   // 히트스톱 중에도 박자가 흘러야 한다
+            if (standLeft > 0f) return;
+
+            standLeft = 0f;
+            Impact(strikeShake * 0.8f, strikeShakeSeconds * 0.8f, strikeHitStop * 0.5f);
+            Utils.GameAudio.Play(Data.Sfx.Strike, standAt, standVolume);
         }
 
         /// <summary>

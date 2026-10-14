@@ -121,6 +121,28 @@ namespace Demo.Collection
         Transform playerT;
         bool lookedForPlayer;
 
+        /// <summary>
+        /// 지금 어디로 가고 있는가. 화면에 "저기로 간다"를 보여 주는 데 쓴다
+        /// [지시 2026-10-14]. 안 움직이고 있으면 <see cref="IsDrifting"/>가 false다.
+        /// </summary>
+        public Vector3 DriftTarget => driftTarget;
+
+        /// <summary>
+        /// 지금 스스로 움직이는 중인가.
+        ///
+        /// 따라오는 카드를 안 고르면 구멍은 <b>무작위로</b> 떠돈다 — 플레이어가 어디로 갈지
+        /// 전혀 못 읽는다. 그래서 목적지를 보여 줄 필요가 생겼다.
+        /// </summary>
+        public bool IsDrifting
+        {
+            get
+            {
+                GameConfig cfg = GameConfigRef.Current;
+                if (cfg == null || cfg.holeDriftSpeed <= 0f) return false;
+                return IsMaxLevel || Core.Upgrades.Has(Core.Upgrades.HoleFollows);
+            }
+        }
+
         void ApplyLevel()
         {
             GameConfig cfg = GameConfigRef.Current;
