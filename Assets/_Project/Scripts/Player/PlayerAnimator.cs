@@ -32,6 +32,9 @@ namespace Demo.Player
         [SerializeField, Tooltip("걷기/달리기 배속 계산. 자세한 설명은 LocomotionRate.cs에 있다")]
         LocomotionRate locomotion = new LocomotionRate();
 
+        [SerializeField, Tooltip("발이 닿는 순간을 집어낸다. 자세한 설명은 FootPlant.cs에 있다")]
+        FootPlant foot = new FootPlant();
+
         [Header("타격 — 골반 비틀림")]
         [SerializeField, Range(4f, 80f), Tooltip("주먹이 나갈 때 골반 비틀림이 올라오는 속도")]
         float twistRise = 40f;
@@ -269,6 +272,12 @@ namespace Demo.Player
             // 배속은 <b>0층 상태에만</b> 건다. anim.speed를 쓰면 상체 주먹까지 같이 빨라져
             // 84ms에 맞춰 둔 타격 타이밍이 어긋난다.
             anim.SetFloat(WalkRateId, locomotion.Rate);
+
+            // 발소리는 <b>여기서</b> 난다 [고침 2026-10-14]. 발이 닿는 순간을 아는 것은
+            // 애니메이션뿐이다 — 걸은 거리로 내면 다리와 계속 어긋난다.
+            if (foot.Tick(anim, 0, locomotion.Blend) > 0)
+                Utils.GameAudio.Play(Data.Sfx.Footstep,
+                                     player != null ? player.transform.position : transform.position);
 
             DriveTwist();
 

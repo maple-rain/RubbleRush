@@ -19,10 +19,6 @@ namespace Demo.Player
         [SerializeField, Tooltip("접지 유지용 하강 가속. 낙하 연출용이 아니다")]
         float groundStick = 20f;
 
-        [SerializeField, Range(0.5f, 6f), Tooltip("발소리 한 번 사이에 걷는 거리(m) [제안·미승인].\n" +
-                 "3m 로봇의 보폭에서 잡았다. 작으면 종종거리고, 크면 미끄러져 보인다")]
-        float stepDistance = 2.2f;
-
         [SerializeField, Range(0.3f, 6f), Tooltip("'약한 자성'으로 잔해가 끌려오는 속도(m/s) " +
                  "[제안·미승인]. 끌리는 범위는 업그레이드 표가 정한다.\n" +
                  "내 속도의 1/4쯤이라 '약하게'가 읽힌다 — 더 올리면 빨아들이는 것처럼 보이고 " +
@@ -152,7 +148,8 @@ namespace Demo.Player
             motion.y = verticalVelocity * dt;
             cc.Move(motion);
 
-            Footsteps(dt);
+            // 발소리는 여기서 내지 않는다 [고침 2026-10-14]. 발이 닿는 순간을 아는 것은
+            // 애니메이션뿐이라 PlayerAnimator가 낸다 — FootPlant.cs 참조.
             Magnet(dt);
         }
 
@@ -196,39 +193,6 @@ namespace Demo.Player
                 d.transform.position = new Vector3(p.x + dir.x, p.y, p.z + dir.y);
             }
         }
-
-        /// <summary>
-        /// 발소리 [지시 2026-10-14].
-        ///
-        /// <b>시간이 아니라 걸은 거리로 낸다.</b> 초로 내면 걷기와 달리기에서 보폭이 달라져
-        /// 발이 미끄러져 보인다. 애니메이션 이벤트로 심는 길도 있지만 클립마다 다시 심어야 하고,
-        /// 업그레이드로 속도가 바뀌면 또 어긋난다.
-        ///
-        /// 음원은 2026-10-08부터 폴더에 있었는데 <see cref="Demo.Data.Sfx"/> 목록에 없어서
-        /// 한 번도 울리지 않고 있었다.
-        /// </summary>
-        void Footsteps(float dt)
-        {
-            // <b>땅 판정을 쓰지 않는다</b> [고침 2026-10-14]. CharacterController의 isGrounded는
-            // 평지를 걷는 중에도 프레임마다 깜빡인다 — 매 프레임 중력으로 눌렀다 떼기 때문이다.
-            // 그때마다 박자를 되감으니 발소리가 들쭉날쭉했다. 이 게임엔 점프가 없으므로
-            // 움직이는가만 보면 된다.
-            if (CurrentSpeed < 0.2f)
-            {
-                stepLeft = stepDistance * 0.35f;   // 다시 걸으면 금방 한 발 나온다
-                return;
-            }
-
-            stepLeft -= CurrentSpeed * dt;
-            if (stepLeft > 0f) return;
-
-            // <b>= 가 아니라 += 다.</b> 넘어간 거리를 다음 걸음에 넘겨야 박자가 안 밀린다 —
-            // 매번 통째로 다시 채우면 프레임 길이만큼씩 흔들린다.
-            stepLeft += stepDistance;
-            Utils.GameAudio.Play(Data.Sfx.Footstep, transform.position);
-        }
-
-        float stepLeft;
 
         void ApplyGravityOnly(float dt)
         {

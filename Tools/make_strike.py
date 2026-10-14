@@ -43,19 +43,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'Assets', '_Project', 'Audio', 'SFX')
 DEFAULT_SRC = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-# 변형 하나가 이 세 장을 쓴다. fighting_sound는 한 장뿐이라 셋이 같이 쓴다.
-SOURCES = [('firecracker_bang (%d).wav', True),
-           ('cannon_fire (%d).wav', True),
-           ('fighting_sound (1).wav', False)]
-
-# <b>변형끼리 음량만 맞춘다.</b> 끄면 원본 그대로 나온다.
+# <b>한 변형이 한 장이다. 섞지 않는다</b> [지시 2026-10-14].
 #
-# 필터와 배합비를 걷어내니 셋의 RMS가 -13.9 / -19.2 / -16.4로 <b>5.3dB 벌어졌다.</b>
-# 칠 때마다 크기가 들쭉날쭉해지는데, 발소리에서 지적받은 "소리가 일정하지 않음"이
-# 바로 그 증상이다. 음량을 맞추는 것은 <b>음원에서 뭘 버리는 일이 아니라서</b> 넣는다 —
-# 어느 대역을 깎을지 고르는 것과는 다르다.
-MATCH_LEVEL = True
-CEILING = 10 ** (-2.0 / 20.0)       # 맞추다 여기 닿으면 거기서 멈춘다
+# 전에는 firecracker + cannon + fighting 셋을 같은 에너지로 겹쳤다. 그것이
+# <b>먹먹함의 원인</b>이었다. 실측:
+#
+#   firecracker (1) 원본 : 2kHz 위 60.5% · 피크-RMS 15.2dB
+#   셋을 겹친 것         : 2kHz 위 21.8% · 피크-RMS 11.9dB
+#
+# `cannon`이 150Hz 아래를 2.3%에서 50.7%로 끌어올렸고, 더 중요하게는
+# <b>피크-RMS가 3.3dB 떨어졌다.</b> 이 값이 곧 '때리는 느낌'이다 — 소리 셋을 겹치면
+# 과도음이 서로 메워져 뭉개진다. 기획자 말대로 "이상하게 만져서 먹먹해졌"다.
+#
+# 받은 소리는 그 자체로 과격하고 날것이다. 그대로 쓴다.
+SOURCES = ['firecracker_bang (1).wav',
+           'firecracker_bang (2).wav',
+           'firecracker_bang (3).wav']
+
+# <b>변형끼리 음량을 맞출 것인가.</b> 기획자 지시로 꺼 두었다 — "원본 그대로 가자".
+MATCH_LEVEL = False
 
 
 def load(path):
@@ -108,7 +114,7 @@ def take(x):
     return tail_fade(y)
 
 
-def equal_energy(waves):
+def _unused_equal_energy(waves):
     """같은 에너지로 맞춘다. 누가 더 크고 작을지는 내가 정할 일이 아니다."""
     out = []
     for w in waves:
@@ -125,6 +131,25 @@ def norm(x, peak=PEAK):
 def rms_db(x):
     """귀가 듣는 크기. 피크는 제일 큰 한 점만 보므로 변형끼리 비교가 안 된다."""
     return 20.0 * np.log10(max(float(np.sqrt((x ** 2).mean())), 1e-9))
+
+
+def crest_db(x):
+    """
+    피크 대 RMS. <b>이 값이 곧 '때리는 느낌'이다.</b>
+
+    소리를 여러 장 겹치면 과도음이 서로 메워져 이 값이 떨어진다 — 실측에서
+    firecracker 혼자 15.2dB이던 것이 셋을 겹치니 11.9dB이 됐고, 그만큼 먹먹해졌다.
+    대역 비율만 보면 안 보이는 것이라 따로 잰다.
+    """
+    r = max(float(np.sqrt((x ** 2).mean())), 1e-9)
+    return 20.0 * np.log10(float(np.max(np.abs(x))) / r)
+
+
+def top_band(x):
+    """2kHz 위가 몇 %인가. 날카로움은 여기 있다."""
+    spec = np.abs(np.fft.rfft(x * np.hanning(x.size))) ** 2
+    f = np.fft.rfftfreq(x.size, 1.0 / SR)
+    return 100.0 * spec[f >= 2000].sum() / (spec.sum() + 1e-20)
 
 
 def match_level(waves):
@@ -186,43 +211,43 @@ def main():
 
     os.makedirs(os.path.normpath(OUT), exist_ok=True)
 
-    mixes = []
-    for i in (1, 2, 3):
-        paths = [os.path.join(src, pat % i if numbered else pat)
-                 for pat, numbered in SOURCES]
-        missing = [p for p in paths if not os.path.exists(p)]
-        if missing:
-            print('원본을 못 찾았다:', missing[0])
+    cuts = []
+    for name in SOURCES:
+        path = os.path.join(src, name)
+        if not os.path.exists(path):
+            print('원본을 못 찾았다:', path)
             return 1
+        raw = load(path)
+        print('  %-26s 시작 %5.0fms · 원본 %.2f초' % (name[:-4], onset(raw) * 1000.0 / SR,
+                                                   raw.size / float(SR)))
+        cuts.append(norm(take(raw)))
 
-        raws = [load(p) for p in paths]
-        print('  %d번  %s' % (i, ' · '.join(
-            '%s 시작%.0fms' % (os.path.basename(p)[:-4], onset(r) * 1000.0 / SR)
-            for p, r in zip(paths, raws))))
-        mixes.append(norm(sum(equal_energy([take(r) for r in raws]))))
-
-    raw_db = [rms_db(m) for m in mixes]
+    raw_db = [rms_db(c) for c in cuts]
     if MATCH_LEVEL:
-        mixes = match_level(mixes)
+        cuts = match_level(cuts)
 
     print()
     made = []
-    for i, mixed in enumerate(mixes, start=1):
+    for i, cut in enumerate(cuts, start=1):
         name = 'SFX_Strike_%02d' % i
         if write:
-            lo, hi = bands(read_back(save(name, mixed)))   # 디스크에 남은 것을 잰다
+            disk = read_back(save(name, cut))             # 디스크에 남은 것을 잰다
         else:
-            lo, hi = bands(mixed)
-        print('  %s  %s  %.2f초  저역 %.1f%% · 고역 %.1f%%   RMS %.1f (맞추기 전 %.1f)'
-              % (name, '썼다' if write else '(안 씀)', LENGTH, lo, hi,
-                 rms_db(mixed), raw_db[i - 1]))
+            disk = cut
+        lo, hi = bands(disk)
+        print('  %s  %s  %.2f초  저역 %.1f%% · 고역 %.1f%% · 2kHz 위 %.1f%%   피크-RMS %.1fdB'
+              % (name, '썼다' if write else '(안 씀)', LENGTH, lo, hi, top_band(disk),
+                 crest_db(disk)))
         made.append(name)
 
     print()
-    print('재료: 받은 일곱 장뿐. 필터 없음. 셋을 같은 에너지로 겹쳤다.')
-    print('음원에 한 일: 앞 무음 떼기 · 0.30초로 자르기 · 끝 내리기 · 변형끼리 음량 맞추기.')
-    if not MATCH_LEVEL:
-        print('(음량 맞추기는 꺼져 있다 — MATCH_LEVEL)')
+    print('한 변형이 한 장이다 — 섞지 않는다. 필터도 없다.')
+    print('음원에 한 일: 앞 무음 떼기 · 0.30초로 자르기 · 끝 내리기. 그게 전부다.')
+    print('피크-RMS가 곧 때리는 느낌이다. 겹쳐 섞으면 이 값이 떨어진다 (15.2 -> 11.9dB였다).')
+    if MATCH_LEVEL:
+        print('변형끼리 음량을 맞췄다 — 끄려면 MATCH_LEVEL = False.')
+    else:
+        print('음량은 원본 그대로다 [지시] — 맞추려면 MATCH_LEVEL = True.')
     print()
     if not write:
         print('재기만 했다. 실제로 쓰려면 --write 를 붙일 것.')
