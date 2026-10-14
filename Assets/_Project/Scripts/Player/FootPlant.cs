@@ -3,26 +3,33 @@ using UnityEngine;
 namespace Demo.Player
 {
     /// <summary>
-    /// 발이 <b>실제로 땅에 닿는 순간</b>을 집어낸다 [고침 2026-10-14].
+    /// 발이 <b>땅에 닿는 순간</b>을 집어낸다 [지시 2026-10-14].
     ///
-    /// <b>무엇이 틀렸었나.</b> 발소리를 <b>걸은 거리</b>로 냈다 — 2.2m마다 한 번.
-    /// 그런데 다리는 애니메이션으로 움직인다. 둘은 서로를 모르므로 계속 어긋났다.
-    /// 기획자 지적: <b>"발을 딛는 타이밍과 소리 재생의 타이밍이 안 맞는다."</b>
+    /// <b>원래 무엇이 틀렸나.</b> 발소리를 걸은 거리(2.2m마다)로 냈다. 다리는 애니메이션으로
+    /// 움직이므로 둘은 서로를 모르고, 소리와 발이 계속 어긋났다.
     ///
-    /// <b>위상표도 틀렸다.</b> 처음에는 클립마다 발이 닿는 위상을 재서 표로 들고
-    /// (Walk 0.292/0.792 · Run 0.375/0.896) 블렌드에 따라 보간했다. 끝점은 맞았지만
-    /// <b>중간에서 깨졌다</b> — 실측하면 blend 0.6에서 오른발이 0.29가 아니라
-    /// <b>0.66~0.77</b>에 바닥에 있었다. 두 클립을 섞으면 자세가 섞이는 것이지
-    /// 착지 시점이 섞이는 것이 아니다.
+    /// <b>그 다음 두 번도 틀렸다.</b> 기록으로 남긴다 —
     ///
-    /// <b>그래서 뼈를 직접 본다.</b> 발이 언제 닿는지는 발가락 뼈가 이미 알고 있다.
-    /// 높이가 내려오다 문턱을 지나는 순간이 착지다. 이러면 블렌드가 어떻든,
-    /// 클립을 다시 자르든(<c>Demo/8b</c>), 배속이 얼마든 <b>언제나 맞는다.</b>
+    /// ① <b>클립별 위상표</b>로 "Walk은 0.292/0.792에 닿는다"를 들고 보간했다. 끝점은 맞았지만
+    ///    블렌드 중간에서 깨졌다(blend 0.6에서 오른발이 0.29가 아니라 0.66~0.77에 바닥).
+    ///    두 클립을 섞으면 <b>자세가 섞이는 것이지 착지 시점이 섞이는 것이 아니다.</b>
     ///
-    /// <b>문턱은 스스로 맞춘다.</b> 걷기와 달리기는 발이 뜨는 높이가 다르다 —
-    /// 실측하면 걷기는 0.127~0.391m, 달리기는 0.095~0.785m다. 고정값을 두면 한쪽이
-    /// 안 울리거나 매 프레임 울린다. 그래서 발마다 최근 높낮이를 따라다니며
-    /// 그 사이의 일정 지점을 문턱으로 쓴다.
+    /// ② <b>절대 문턱</b>으로 "바닥에서 1cm 안이면 착지"로 바꿨다. 그런데 바닥이 보행마다 다르다 —
+    ///    실측하면 걷기 발끝 바닥 12.7cm, 달리기 9.5cm로 <b>32mm 차이, 문턱의 3.2배</b>다.
+    ///    바닥 기준을 '최근 최소값'으로 들고 있었으므로, 달리다 걷기로 줄이면 달리기 바닥이
+    ///    최대 3.2초간 붙잡혀 <b>착지가 한 번도 성립하지 않았다</b>(약 아홉 걸음 무음).
+    ///    기획자가 말한 "들리다 안 들리다의 반복"이 이것이다.
+    ///
+    /// <b>지금 방식: 바닥을 치고 올라오는 순간을 잡는다.</b>
+    /// 발 높이가 내려가다 <b>돌아서 올라가기 시작하는</b> 프레임이 착지다. 이것은
+    /// <b>상수 오프셋에 면역</b>이라 보행이 바뀌든, 자세 보정이 몸을 기울이든, 땅이 기울든
+    /// 돌아서는 순간 자체는 변하지 않는다.
+    ///
+    /// <b>얕은 골은 바닥 기준으로 거른다.</b> 걷기에서 발가락은 한 바퀴에 세 번 내려온다 —
+    /// 진짜 착지(12.6cm)와 발끝을 굴리는 골(15.4cm)과 공중의 골(16.5cm)이다.
+    /// 바닥 기준(<see cref="Foot.Floor"/>)은 <b>내려갈 때는 즉시 따라가고 올라올 때는
+    /// 천천히</b> 돌아온다. 그래서 진짜 착지만 기준에 닿고, 얕은 골은 걸러지며,
+    /// 보행이 바뀌어도 한두 걸음 안에 기준이 새 바닥을 찾는다.
     ///
     /// MonoBehaviour가 아닌 이유는 <see cref="LocomotionRate"/>와 같다.
     /// </summary>
@@ -33,26 +40,22 @@ namespace Demo.Player
                  "로봇은 LeftToeBase / RightToeBase다")]
         string boneMark = "ToeBase";
 
-        [SerializeField, Range(0.005f, 0.08f),
-         Tooltip("제일 낮은 자리에서 이만큼(m) 안으로 내려오면 '닿았다'로 본다.\n\n" +
-                 "비율이 아니라 거리인 이유 [실측 2026-10-14]: 발이 뜨는 높이가 " +
-                 "걷기는 13cm, 달리기는 69cm로 다섯 배 차이다. 비율로 잡으면 달리기에서 " +
-                 "문턱이 땅에서 17.8cm나 떠서 착지보다 131ms 먼저 울렸다.\n\n" +
-                 "0.01m인 이유: 걷기에서 발가락은 한 바퀴에 두 번 내려온다 — " +
-                 "진짜 착지(바닥에서 0cm)와 발끝을 굴리는 얕은 골(2.8cm)이다. 그 사이를 가른다")]
-        float plantMargin = 0.01f;
+        [SerializeField, Range(0.002f, 0.05f),
+         Tooltip("바닥 기준에서 이만큼(m) 안쪽의 골만 착지로 본다.\n" +
+                 "실측: 걷기에서 진짜 착지와 발끝 굴림의 얕은 골이 28mm 떨어져 있다.\n" +
+                 "그 사이를 가르는 값이면 된다")]
+        float plantMargin = 0.012f;
 
-        [SerializeField, Range(0.01f, 0.2f),
-         Tooltip("다시 울리기 전에 발이 바닥에서 이만큼(m) 떠야 한다.\n\n" +
-                 "비율이 아니라 거리인 이유 [고침 2026-10-14]: 범위의 비율로 잡았더니 " +
-                 "달리기 범위(69cm)가 걷기의 재장전 문턱을 40.8cm까지 끌어올렸고, " +
-                 "걷기에서 발이 28cm밖에 안 떠서 영영 재장전이 안 됐다 — 발소리가 통째로 멎었다")]
-        float liftMargin = 0.04f;
+        [SerializeField, Range(0.005f, 0.4f),
+         Tooltip("바닥 기준이 1초에 몇 m나 올라오는가.\n\n" +
+                 "<b>너무 빠르면</b> 한 걸음 안에서 기준이 발을 따라 올라가 얕은 골까지 착지로 센다.\n" +
+                 "<b>너무 느리면</b> 달리다 걷기로 줄였을 때 달리기 바닥(32mm 아래)에 붙잡혀 " +
+                 "발소리가 몇 걸음씩 통째로 빠진다 — 실측된 '들리다 안 들리다'의 원인이 그것이다")]
+        float floorRise = 0.05f;
 
-        [SerializeField, Range(1f, 20f),
-         Tooltip("최근 높낮이를 재는 구간의 길이(초). 걷기 한 바퀴(1.125초)보다 길어야 한다.\n" +
-                 "짧으면 한 걸음을 통째로 못 봐서 위아래 기준이 뜻을 잃는다")]
-        float forget = 1.6f;
+        [SerializeField, Range(0.0002f, 0.01f),
+         Tooltip("이만큼(m) 다시 올라와야 '돌아섰다'고 본다. 미세한 떨림으로 울리지 않게 하는 값")]
+        float turnEpsilon = 0.0015f;
 
         [SerializeField, Range(0f, 0.5f),
          Tooltip("이보다 느리면 발소리를 내지 않는다. 제자리 대기에서 울리지 않게 하는 문턱")]
@@ -65,27 +68,16 @@ namespace Demo.Player
         public int Plants { get; private set; }
 
         /// <summary>
-        /// 발 하나가 기억하는 것.
-        ///
-        /// <b>Armed는 false로 시작한다</b> [고침 2026-10-14]. true로 두면 기억이 빈 첫 프레임에
-        /// 바닥 기준이 곧 지금 높이라서 <b>서 있던 자세 그대로 한 번 울린다</b> —
-        /// 걷기 시작할 때마다 헛걸음이 하나 섞였다. false면 발이 한 번 떠야 비로소
-        /// 착지를 받으므로, 첫 소리가 진짜 첫 걸음에 난다.
-        ///
-        /// <b>높낮이를 두 벌 들고 있다</b> [고침 2026-10-14]. 지난 구간에서 본 것(Low/High)과
-        /// 지금 구간에서 모으고 있는 것(WinLow/WinHigh)이다. 쓸 때는 <b>둘을 합친다.</b>
-        ///
-        /// 처음에는 매 프레임 조금씩 좁히는 지수 감쇠를 썼는데, 그러면 <b>평형에서 창이
-        /// 늘 실제보다 좁다.</b> 좁은 창에서 "아래 12%"를 잡으면 그 자리가 실제로는 더 높아서,
-        /// 걷기의 가짜 골(발끝 굴림, 15.4cm)까지 착지로 세었다.
-        /// 구간을 통째로 갈아 끼우면 창이 줄어들지 않는다.
+        /// 발 하나가 기억하는 것. <b>창(window)도 구간도 없다</b> — 지난 프레임 높이와
+        /// 지금 하강의 최저, 그리고 바닥 기준뿐이다.
         /// </summary>
         struct Foot
         {
-            public float Low, High;          // 지난 구간
-            public float WinLow, WinHigh;    // 지금 모으는 중
-            public float WinAge;
-            public bool Armed;
+            public float Floor;     // 바닥 기준. 내려갈 때 즉시, 올라올 때 천천히
+            public float PrevY;     // 지난 프레임 높이
+            public float DipY;      // 지금 하강에서 본 최저
+            public bool Falling;    // 내려가는 중인가
+            public bool Fresh;      // 아직 첫 프레임인가
         }
 
         /// <summary>
@@ -100,40 +92,30 @@ namespace Demo.Player
 
             toes = found.ToArray();
             feet = new Foot[toes.Length];
+            Forget();
+        }
+
+        /// <summary>기억을 비운다. 멈췄을 때와 처음 물릴 때 부른다.</summary>
+        void Forget()
+        {
             for (int i = 0; i < feet.Length; i++)
-                feet[i] = new Foot
-                {
-                    Low = float.MaxValue, High = float.MinValue,
-                    WinLow = float.MaxValue, WinHigh = float.MinValue,
-                    Armed = false,
-                };
+                feet[i] = new Foot { Fresh = true };
         }
 
         /// <summary>
         /// 한 프레임 보고, <b>이번 프레임에 땅에 닿은 발의 수</b>를 돌려준다.
         /// 보통 0이고 가끔 1이다.
         /// </summary>
-        /// <param name="root">발 높이를 재는 기준. 플레이어의 발밑이다</param>
+        /// <param name="root">높이를 재는 기준. 플레이어의 몸이다</param>
         /// <param name="blend">0=정지, 1=최고속. <see cref="LocomotionRate.Blend"/></param>
         public int Tick(Transform root, float blend, float dt)
         {
             if (toes == null || toes.Length == 0 || root == null) return 0;
 
             // 멈춰 있을 때는 재지 않는다. 대기 동작의 미세한 발 흔들림으로 울리면 안 된다.
-            //
-            // <b>기억도 같이 비운다</b> [고침 2026-10-14]. 안 비우면 서 있던 자세의 발 높이와
-            // 달리던 때의 발 높이가 한 창에 섞인다. 실측에서 바닥 기준이 선 자세의 5.7cm로,
-            // 천장이 달리기의 69.5cm로 잡히는 바람에 <b>걷기에서는 착지도 재장전도
-            // 영영 일어나지 않았다</b> — 발소리가 통째로 멎었다.
             if (blend < minBlend)
             {
-                for (int i = 0; i < feet.Length; i++)
-                    feet[i] = new Foot
-                    {
-                        Low = float.MaxValue, High = float.MinValue,
-                        WinLow = float.MaxValue, WinHigh = float.MinValue,
-                        Armed = false,
-                    };
+                Forget();
                 return 0;
             }
 
@@ -143,54 +125,44 @@ namespace Demo.Player
             {
                 if (toes[i] == null) continue;
 
-                // <b>월드가 아니라 몸 기준으로 잰다</b> [고침 2026-10-14].
+                // 몸 기준 높이. 월드 y에서 몸의 움직임(걷기·낙하·지형)을 뺀 값이다.
                 //
-                // 월드 y에서 루트 y를 빼는 방식은 바깥 움직임을 그대로 받는다:
-                // CharacterController가 매 프레임 중력으로 눌렀다 떼고(groundStick),
-                // 땅이 기울거나 잔해 위를 걸으면 높이가 변하고, <see cref="PostureFix"/>가
-                // 몸을 기울이면 발의 월드 높이가 또 바뀐다. 착지 문턱이 1cm인데
-                // 그 잡음이 비슷한 크기라 <b>걸음마다 판정이 흔들렸다.</b>
-                //
-                // InverseTransformPoint는 그 전부를 걷어내고 <b>애니메이션이 만든 높이</b>만 남긴다.
+                // <b>이것만으로는 자세 보정이 안 걷힌다</b> [실측 2026-10-14]. PostureFix는
+                // 몸이 아니라 <b>몸 아래의 Hips</b>를 돌리므로 이 좌표에 그대로 들어온다
+                // (3도 기울면 발 하나가 약 16mm 오르내린다). 아래의 '돌아서는 순간' 판정이
+                // 상수 오프셋에 면역이라 그 흔들림을 견딘다 — 절대 문턱이면 못 견딘다.
                 float y = root.InverseTransformPoint(toes[i].position).y;
 
                 Foot f = feet[i];
-
-                // 지금 구간에 쌓는다
-                f.WinLow = Mathf.Min(f.WinLow, y);
-                f.WinHigh = Mathf.Max(f.WinHigh, y);
-                f.WinAge += dt;
-
-                // 구간이 차면 통째로 갈아 끼운다. 조금씩 좁히지 않으므로 창이 안 줄어든다.
-                if (f.WinAge >= forget)
+                if (f.Fresh)
                 {
-                    f.Low = f.WinLow;
-                    f.High = f.WinHigh;
-                    f.WinLow = f.WinHigh = y;
-                    f.WinAge = 0f;
+                    f.Floor = f.PrevY = f.DipY = y;
+                    f.Fresh = false;
+                    feet[i] = f;
+                    continue;
                 }
 
-                // 판정은 <b>지난 구간과 지금 구간을 합쳐서</b> 한다. 그래야 막 걷기 시작했을 때
-                // (지금 구간이 아직 한 걸음도 안 됐을 때) 엉뚱한 문턱이 안 나온다.
-                float low = Mathf.Min(f.Low, f.WinLow);
-                float high = Mathf.Max(f.High, f.WinHigh);
-                float span = high - low;
+                // 바닥 기준: 천천히 올라오다가, 발이 그 아래로 내려가면 즉시 따라간다.
+                f.Floor += floorRise * dt;
+                if (y < f.Floor) f.Floor = y;
 
-                // <b>둘 다 바닥에서의 거리로 잰다.</b> 비율로 잡으면 달리기의 넓은 범위가
-                // 걷기의 문턱까지 끌어올려, 걷기에서 영영 안 울리게 된다.
-                if (span > plantMargin)
+                if (y < f.PrevY)
                 {
-                    if (f.Armed && y <= low + plantMargin)
+                    if (!f.Falling) { f.Falling = true; f.DipY = f.PrevY; }
+                    if (y < f.DipY) f.DipY = y;
+                }
+                else if (f.Falling && y >= f.DipY + turnEpsilon)
+                {
+                    // 바닥을 치고 올라오기 시작했다. 이 골이 바닥 기준에 닿았으면 착지다.
+                    f.Falling = false;
+                    if (f.DipY <= f.Floor + plantMargin)
                     {
-                        f.Armed = false;                 // 닿았다
+                        f.Floor = f.DipY;        // 기준을 이번 착지에 다시 묶는다
                         hits++;
                     }
-                    else if (!f.Armed && y >= low + liftMargin)
-                    {
-                        f.Armed = true;                  // 충분히 떴다 — 다음 착지를 받는다
-                    }
                 }
 
+                f.PrevY = y;
                 feet[i] = f;
             }
 
