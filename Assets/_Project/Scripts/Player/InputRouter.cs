@@ -234,7 +234,10 @@ namespace Demo.Player
             if (ActionPressedThisFrame)
             {
                 ActionActive = !ActionActive;
-                Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
+
+                // <b>필드에서만 낸다</b> [고침 2026-10-14]. 타격 화면에서는 같은 버튼이
+                // 주먹이라, 걸러내지 않으면 연타할 때마다 토글음이 같이 울린다.
+                if (InField()) Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
                 StrikeRightArm = injected ?? DecideStrikeSide();
             }
 
@@ -245,9 +248,21 @@ namespace Demo.Player
             if (Edge(RunOverride, ref runHeldLast, runAction))
             {
                 RunActive = !RunActive;
-                Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
+                if (InField()) Utils.GameAudio.Play(Data.Sfx.UiToggle, transform.position);
             }
         }
+
+        /// <summary>
+        /// 필드 화면인가. 한 번만 찾아 들고 있는다 — 입력마다 Find를 돌 수는 없다.
+        /// </summary>
+        bool InField()
+        {
+            if (!lookedForMode) { lookedForMode = true; mode = Core.GameModeController.Instance; }
+            return mode == null || mode.IsField;
+        }
+
+        Core.GameModeController mode;
+        bool lookedForMode;
 
         /// <summary>
         /// 행동 버튼이 눌려 있는가. <see cref="MouseTakenByTouchUi"/>가 켜져 있으면

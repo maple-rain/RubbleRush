@@ -209,12 +209,22 @@ namespace Demo.Player
         /// </summary>
         void Footsteps(float dt)
         {
-            if (!cc.isGrounded || CurrentSpeed < 0.2f) { stepLeft = stepDistance * 0.4f; return; }
+            // <b>땅 판정을 쓰지 않는다</b> [고침 2026-10-14]. CharacterController의 isGrounded는
+            // 평지를 걷는 중에도 프레임마다 깜빡인다 — 매 프레임 중력으로 눌렀다 떼기 때문이다.
+            // 그때마다 박자를 되감으니 발소리가 들쭉날쭉했다. 이 게임엔 점프가 없으므로
+            // 움직이는가만 보면 된다.
+            if (CurrentSpeed < 0.2f)
+            {
+                stepLeft = stepDistance * 0.35f;   // 다시 걸으면 금방 한 발 나온다
+                return;
+            }
 
             stepLeft -= CurrentSpeed * dt;
             if (stepLeft > 0f) return;
 
-            stepLeft = stepDistance;
+            // <b>= 가 아니라 += 다.</b> 넘어간 거리를 다음 걸음에 넘겨야 박자가 안 밀린다 —
+            // 매번 통째로 다시 채우면 프레임 길이만큼씩 흔들린다.
+            stepLeft += stepDistance;
             Utils.GameAudio.Play(Data.Sfx.Footstep, transform.position);
         }
 

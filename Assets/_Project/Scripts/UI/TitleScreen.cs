@@ -162,6 +162,7 @@ namespace Demo.UI
         void OnGUI()
         {
             if (page == Page.Playing) return;
+            if (HowToScreen.Blocking) return;     // 조작법이 떠 있으면 그 쪽만 보인다
             if (big == null) Styles();
 
             float h = Screen.height, w = Screen.width;
@@ -223,10 +224,12 @@ namespace Demo.UI
         {
             GUI.Label(new Rect(0, h * 0.13f, w, h * 0.16f), title, big);
 
-            float bw = w * 0.30f, bh = h * 0.115f, x = (w - bw) * 0.5f;
-            if (Button(new Rect(x, h * 0.38f, bw, bh), "시작", mid)) Begin();
-            if (Button(new Rect(x, h * 0.53f, bw, bh), "옵션", mid)) page = Page.Options;
-            if (Button(new Rect(x, h * 0.68f, bw, bh), "나가기", mid)) Quit();
+            // 조작법이 늘어 넷이 됐다 — 간격을 좁혀 아래 문구와 안 겹치게 한다 [2026-10-14]
+            float bw = w * 0.30f, bh = h * 0.100f, x = (w - bw) * 0.5f;
+            if (Button(new Rect(x, h * 0.355f, bw, bh), "시작", mid)) Begin();
+            if (Button(new Rect(x, h * 0.475f, bw, bh), "조작법", mid)) HowToScreen.Open();
+            if (Button(new Rect(x, h * 0.595f, bw, bh), "옵션", mid)) page = Page.Options;
+            if (Button(new Rect(x, h * 0.715f, bw, bh), "나가기", mid)) Quit();
 
             small.normal.textColor = new Color(1f, 1f, 1f, 0.45f);
             GUI.Label(new Rect(0, h * 0.86f, w, h * 0.06f),

@@ -62,50 +62,53 @@ namespace Demo.UI
         }
 
         /// <summary>
-        /// 구멍이 <b>어디로 가는지</b> 바닥에 표시한다 [지시 2026-10-14].
+        /// 구멍이 <b>어느 쪽으로 가는지</b> 작은 화살표로 보여 준다 [지시 2026-10-14].
         ///
-        /// <b>왜 필요한가.</b> 구멍은 최종 단계가 되면 스스로 떠도는데 목적지가 무작위다.
-        /// 속도를 1.2에서 4m/s로 올리고 나니 "어디로 갈지 예측이 안 된다"가 더 커졌다.
-        /// 지금 어디 있는지(화살표)만으로는 짐을 안고 마중 나갈 수가 없다.
+        /// <b>왜 필요한가.</b> 구멍은 스스로 떠도는데 방향이 무작위다. 지금 어디 있는지는
+        /// 알아도 다음에 어디로 갈지 모르면 짐을 안고 마중 나갈 수가 없다.
         ///
-        /// <b>따라오는 카드를 골랐으면 안 그린다.</b> 그때 목적지는 나 자신이라
-        /// 표시가 늘 발밑에 붙어 시야만 가린다.
+        /// 처음에는 목적지에 원을 그리고 점선을 깔았는데, 구멍이 멀 때 그 원이 화면 어딘가에
+        /// 혼자 떠 있어 무엇인지 읽히지 않았다. <b>구멍에 붙은 작은 화살표</b>가
+        /// "이쪽으로 간다"를 훨씬 바로 말한다.
         ///
-        /// 원은 점 여덟 개로 그린다 — 원형 텍스처를 따로 만들 만한 일이 아니다.
+        /// <b>따라오는 카드를 골랐으면 안 그린다.</b> 그때 방향은 늘 나를 향해 있어
+        /// 알려 줄 것이 없다.
         /// </summary>
         void DriftHint(Vector3 holeScreen)
         {
+            if (arrow == null || holeScreen.z <= 0f) return;
             if (!hole.IsDrifting) return;
             if (Core.Upgrades.Has(Core.Upgrades.HoleFollows)) return;
 
-            Vector3 t = cam.WorldToScreenPoint(hole.DriftTarget);
-            if (t.z <= 0f) return;                       // 카메라 뒤 — 그릴 자리가 없다
+            Vector3 goTo = hole.DriftTarget;
+            Vector2 way = new Vector2(goTo.x - hole.transform.position.x,
+                                      goTo.z - hole.transform.position.z);
+            if (way.sqrMagnitude < 0.25f) return;      // 거의 다 왔다 — 가리킬 것이 없다
 
-            Vector2 to = new Vector2(t.x, Screen.height - t.y);
-            float ring = Screen.height * 0.022f;
-            float dot = Mathf.Max(2f, Screen.height * 0.004f);
+            // 월드 방향을 화면 방향으로 옮긴다. 쿼터뷰라 월드 XZ와 화면 XY가 다르다.
+            Vector3 aheadScreen = cam.WorldToScreenPoint(
+                hole.transform.position + new Vector3(way.normalized.x, 0f, way.normalized.y) * 2f);
+            if (aheadScreen.z <= 0f) return;
 
-            // 구멍에서 목적지까지 점선 — '여기서 저기로'가 선으로 읽힌다
-            if (holeScreen.z > 0f)
-            {
-                Vector2 from = new Vector2(holeScreen.x, Screen.height - holeScreen.y);
-                float span = Vector2.Distance(from, to);
-                int steps = Mathf.Clamp(Mathf.RoundToInt(span / (dot * 5f)), 0, 40);
-                for (int i = 1; i < steps; i++)
-                {
-                    Vector2 p = Vector2.Lerp(from, to, i / (float)steps);
-                    UiSkin.Fill(new Rect(p.x - dot * 0.5f, p.y - dot * 0.5f, dot, dot),
-                                new Color(1f, 1f, 1f, 0.22f));
-                }
-            }
+            Vector2 dir = new Vector2(aheadScreen.x - holeScreen.x, aheadScreen.y - holeScreen.y);
+            if (dir.sqrMagnitude < 1f) return;
+            dir.Normalize();
 
-            // 목적지 원
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI * 0.25f;
-                var p = new Vector2(to.x + Mathf.Cos(a) * ring, to.y + Mathf.Sin(a) * ring);
-                UiSkin.Fill(new Rect(p.x - dot, p.y - dot, dot * 2f, dot * 2f), UiSkin.Accent);
-            }
+            float size = Screen.height * sizeFraction * 0.55f;   // 가장자리 화살표보다 작게
+            Vector2 pivot = new Vector2(holeScreen.x + dir.x * size * 1.1f,
+                                        Screen.height - (holeScreen.y + dir.y * size * 1.1f));
+
+            float angle = -Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+
+            Matrix4x4 saved = GUI.matrix;
+            Color savedColor = GUI.color;
+
+            GUIUtility.RotateAroundPivot(angle, pivot);
+            GUI.color = new Color(UiSkin.Accent.r, UiSkin.Accent.g, UiSkin.Accent.b, 0.85f);
+            GUI.DrawTexture(new Rect(pivot.x - size * 0.5f, pivot.y - size * 0.5f, size, size), arrow);
+
+            GUI.color = savedColor;
+            GUI.matrix = saved;
         }
 
         bool ShouldDraw()

@@ -28,7 +28,9 @@ PEAK = 10 ** (-6.0 / 20.0)      # 효과음(-2.0)보다 낮게. 음악이 크면
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    '..', 'Assets', '_Project', 'Audio', 'BGM')
 
-BPM = 84                        # 느릿한 작업 속도. 뛰는 곡이 아니다
+BPM = 112                       # 반쯤 캐쥬얼로 방향을 바꾸며 올렸다 [지시 2026-10-14].
+                                # 84는 '느릿한 작업'이었는데, 로봇이 귀엽고 장르가
+                                # 캐쥬얼이라 그 템포가 화면과 안 맞았다
 BEAT = 60.0 / BPM
 BARS = 8
 BEATS = BARS * 4
@@ -36,10 +38,11 @@ TOTAL = int(round(SR * BEAT * BEATS))   # 루프가 딱 맞게 샘플 수를 반
 
 rng = np.random.default_rng(20261008)
 
-# 단조 5음계. 반음이 없어 아무 음이나 겹쳐도 부딪히지 않는다 —
-# 화성을 일일이 짜지 않고도 들을 만한 소리가 나온다.
-ROOT = 110.0                    # A2
-SCALE = [0, 3, 5, 7, 10]        # 단5음계
+# <b>장5음계.</b> 반음이 없어 아무 음이나 겹쳐도 부딪히지 않는 것은 단5음계와 같고,
+# 밝기만 반대다 — 곡을 다시 짜지 않고 <b>음계 한 줄</b>로 분위기가 뒤집힌다
+# [지시 2026-10-14: 산뜻하게].
+ROOT = 130.81                   # C3. A2보다 한 음 반 위라 소리가 뜬다
+SCALE = [0, 2, 4, 7, 9]         # 장5음계 (도 레 미 솔 라)
 
 
 def note_hz(step):
@@ -132,25 +135,38 @@ def save(name, x):
 # 두 곡은 같은 뼈대를 쓴다. 조와 박자가 같아야 화면이 바뀔 때 어긋나지 않는다.
 
 def bones():
-    """두 곡이 공유하는 바탕 — 느린 저음 패드와 드문드문한 뜯는 음."""
+    """두 곡이 공유하는 바탕 — 가벼운 저음과 또박또박 뜯는 음.
+
+    <b>비어 있어야 한다는 원칙은 그대로다.</b> 타격음이 초당 다섯 번 울리므로
+    음악이 바쁘면 그게 다 묻힌다. 밝게 바꾸되 음을 늘리지는 않았다.
+    """
     buf = np.zeros(TOTAL)
 
-    # 네 마디마다 바뀌는 저음. 1도 - 7도 - 4도 - 1도
-    for bar, deg in enumerate([0, -2, 3, 0] * (BARS // 4)):
-        mix(buf, pad(note_hz(deg) * 0.5, BEAT * 4), beat=bar * 4, gain=0.55)
+    # 네 마디마다 바뀌는 저음. 1도 - 5도 - 6도 - 4도 꼴로, 캐쥬얼 게임이 흔히 쓰는 걸음이다
+    for bar, deg in enumerate([0, 3, 4, 2] * (BARS // 4)):
+        mix(buf, pad(note_hz(deg) * 0.5, BEAT * 4), beat=bar * 4, gain=0.42)
 
-    # 드문드문 뜯는 음. 마디마다 두세 개만 — 비어 있어야 타격음이 들린다
+    # 뜯는 음. 밝게(bright 0.8) 타고 박에 또박또박 얹는다
     for bar in range(BARS):
-        for b, deg in ((0.0, 7), (1.5, 9), (2.5, 5), (3.5, 10))[: 2 if bar % 2 else 3]:
-            mix(buf, pluck(note_hz(deg), BEAT * 1.6), beat=bar * 4 + b, gain=0.34)
+        for b, deg in ((0.0, 7), (1.0, 9), (2.0, 8), (3.0, 10))[: 3 if bar % 2 else 4]:
+            mix(buf, pluck(note_hz(deg), BEAT * 1.1, bright=0.8),
+                beat=bar * 4 + b, gain=0.30)
     return buf
 
 
 def field():
     buf = bones()
-    # 아주 느린 맥박. 두 마디에 한 번만 — 있는 듯 없는 듯
-    for bar in range(0, BARS, 2):
-        mix(buf, kick(), beat=bar * 4, gain=0.5)
+
+    # 한 마디에 한 번씩 또박또박. 84BPM일 때는 두 마디에 한 번이었는데,
+    # 112BPM에서는 그러면 박자가 사라진다
+    for bar in range(BARS):
+        mix(buf, kick(), beat=bar * 4, gain=0.55)
+
+    # <b>뒷박 셰이커.</b> 캐쥬얼한 느낌은 대개 여기서 나온다 —
+    # 정박만 있으면 행진곡이 되고, 뒷박이 들어가야 통통 튄다
+    for bar in range(BARS):
+        for b in (1.5, 3.5):
+            mix(buf, metal(0.10), beat=bar * 4 + b, gain=0.16)
     return buf
 
 
@@ -162,9 +178,9 @@ def demolition():
             mix(buf, kick(), beat=bar * 4 + b, gain=0.8)
         for b in (1.0, 3.0, 3.5):
             mix(buf, metal(), beat=bar * 4 + b, gain=0.3)
-    # 낮게 깔리는 쇳소리
+    # 낮게 깔리는 쇳소리. 밝은 조에서는 이게 너무 무거워 반으로 줄였다
     for bar in range(0, BARS, 4):
-        mix(buf, pad(note_hz(0) * 0.25, BEAT * 16), beat=bar * 4, gain=0.4)
+        mix(buf, pad(note_hz(0) * 0.25, BEAT * 16), beat=bar * 4, gain=0.2)
     return buf
 
 
