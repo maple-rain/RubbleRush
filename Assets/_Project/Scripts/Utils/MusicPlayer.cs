@@ -92,12 +92,24 @@ namespace Demo.Utils
             AudioSource next = onA ? b : a;
             onA = !onA;
 
-            if (clip != null)
-            {
-                next.clip = clip;
-                next.volume = 0f;
-                next.Play();
-            }
+            if (clip == null) return;
+
+            // <b>돌아오는 곡은 다시 틀지 않는다</b> [고침 2026-10-15].
+            //
+            // 곡이 A -> B -> A로 빠르게 돌아오면, 돌아온 A는 아직 <b>꺼지는 중이라 들리고
+            // 있다.</b> 거기에 Play()를 다시 걸면 그 자리에서 처음으로 되감기므로,
+            // 같은 곡이 두 지점에서 겹쳐 들린다 — "배경음이 끝나기 전에 새 배경음이
+            // 재생된다"가 이것이다.
+            //
+            // 파괴 화면을 들락거리거나 프레임이 길게 멈춰 두 전환이 한 프레임에 몰리면
+            // 바로 재현된다. 이미 그 곡을 쥐고 울리는 중이면 <b>건드리지 않고</b>
+            // 위의 onA만 뒤집는다 — 그러면 <see cref="Fade"/>가 다음 프레임부터
+            // 그 소리를 <b>있던 자리에서</b> 도로 키운다.
+            if (next.clip == clip && next.isPlaying) return;
+
+            next.clip = clip;
+            next.volume = 0f;
+            next.Play();
         }
 
         /// <summary>파괴 화면으로 들어가고 나올 때 부른다. 곡이 없으면 필드 곡을 그대로 쓴다.</summary>
