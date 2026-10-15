@@ -107,6 +107,16 @@ namespace Demo.Player
                 Destructible d = Destructible.From(hits[i]);
                 if (d == null || !d.IsBreakable) continue;
 
+                // <b>구멍으로 넘어가는 중인 건물은 고르지 않는다</b> [고침 2026-10-15].
+                //
+                // 반대쪽 짝이다 — BuildingSwallow는 때리고 있는 건물을 안 집고, 여기서는
+                // 넘어가는 건물로 못 들어간다. 안 막으면 기울어 가라앉는 중인 건물을
+                // 붙잡고 파괴 화면이 열려서, 대상이 발밑으로 빠지는 동안 두드리게 된다.
+                //
+                // 가장 가까운 것 하나만 빼는 게 아니라 <b>후보에서 빼므로</b>, 옆에 멀쩡한
+                // 건물이 있으면 그쪽이 뜬다. 말없이 아무것도 안 뜨는 것보다 낫다.
+                if (ToppleFall.IsFalling(d)) continue;
+
                 float sqr = (d.transform.position - transform.position).sqrMagnitude;
                 if (sqr < bestSqr) { bestSqr = sqr; best = d; }
             }

@@ -159,8 +159,16 @@ namespace Demo.UI
             rows.Clear();
             blocked = null;
 
-            // 타이틀이 덮고 있으면 아무것도 안 띄운다 — 그 너머로 눌리면 안 된다.
-            if (TitleScreen.Blocking) return;
+            // <b>덮는 화면이 하나라도 있으면 아무것도 안 띄운다</b> — 그 너머로 눌리면 안 된다.
+            //
+            // 전에는 타이틀만 봤다. 그래서 <b>결과 화면 위에 "E 부수기"가 그대로 떠 있었다</b>
+            // [기획자 2026-10-15]. 구역이 끝나도 모드는 Field 그대로라 아래 IsField 검사를
+            // 멀쩡히 통과한다 — 모드만으로는 "판이 끝났다"를 알 수 없다.
+            //
+            // <see cref="TouchControls"/>가 이미 같은 목록을 보고 있다. 그래서 화면에
+            // 대쉬·케이블 버튼은 안 보이는데 E만 남아 있었다. 목록을 맞춘다.
+            if (TitleScreen.Blocking || ResultScreen.Blocking
+                || UpgradeScreen.Blocking || HowToScreen.Blocking) return;
 
             var mode = GameModeController.Instance;
             if (mode == null || !mode.IsField) return;      // 파괴 화면에서는 안 띄운다

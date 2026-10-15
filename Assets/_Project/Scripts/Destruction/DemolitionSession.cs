@@ -158,8 +158,17 @@ namespace Demo.Destruction
             // '몇 초 걸리는가'는 기획자가 채운 값이고, '초당 몇 번 두드리는가'는 손의 특성이라
             // 대상별이 아니라 전역이다. 새 수치는 tapsPerSecond 하나만 늘어난다.
             // "두 배로 부수기"는 필요 타수를 줄인다 [지시 2026-10-13].
-            float taps = Mathf.Max(1f, Target.Data.breakTime * cfg.tapsPerSecond
-                                     * Core.Upgrades.Mul(Core.Upgrades.FastBreak));
+            // <b>타수는 정수다. 모자라면 올린다</b> [지시 2026-10-15].
+            //
+            // 전에는 실수였다. breakTime 2.5초짜리면 2.5 x 5 = 12.5탭이고, 여기에
+            // "두 배로 부수기"(x0.5)가 붙으면 6.25탭이 된다. 그러면 마지막 한 대가
+            // <b>반 대</b>가 되어 게이지가 12탭에 0.96, 13탭에 1.04로 튄다 —
+            // 건물마다 마지막 타격의 무게가 달라지고, 몇 대면 되는지를 셀 수가 없다.
+            //
+            // 올림인 이유: 내림하면 6.25탭짜리가 6탭에 끝나 <b>원래보다 쉬워진다</b>.
+            // 올림은 "모자라면 한 대 더"라 breakTime이 뜻하던 난이도를 넘지 않는다.
+            int taps = Mathf.Max(1, Mathf.CeilToInt(Target.Data.breakTime * cfg.tapsPerSecond
+                                                  * Core.Upgrades.Mul(Core.Upgrades.FastBreak)));
             float before = Gauge;
 
             // <b>세어서 나눈다. 더해서 쌓지 않는다.</b>
@@ -172,7 +181,8 @@ namespace Demo.Destruction
             //
             // 횟수를 세어 한 번만 나누면 오차가 쌓이지 않는다 — taps가 정수일 때
             // TapCount == taps 순간의 몫이 정확히 1.0이 된다.
-            Gauge = Mathf.Clamp01(TapCount / taps);
+            // (float) 없이는 <b>정수 나눗셈</b>이 되어 게이지가 0 아니면 1만 나온다.
+            Gauge = Mathf.Clamp01(TapCount / (float)taps);
 
             // 층이 <b>방금 쏟아졌는가</b>. 이 게임에서 가장 자주 오는 큰 박자다.
             //
@@ -194,12 +204,21 @@ namespace Demo.Destruction
             if (fx != null)
             {
                 // 마지막 층은 완파와 같은 탭에 터진다. 둘을 같이 울리면 셰이크가 겹쳐
-                // 한 번의 큰 흔들림으로 뭉개지므로, 끝나는 탭에서는 완파 쪽만 쓴다.
+                // 한 번의 큰 흔들림으로 뭉개지므로, 끝나는 탭에서는 층 붕괴를 건너뛴다.
                 // 주먹은 <b>먼저, 조건 없이</b>. 어느 박자가 울리든 플레이어는 쳤다.
                 fx.OnPunch(input != null && input.StrikeRightArm);
 
+                // <b>마지막 탭에도 타격음이 난다</b> [고침 2026-10-15].
+                //
+                // 전에는 둘째 줄이 `else if (!floorJustBlew)`였다. 마지막 탭은
+                // floorJustBlew가 참이면서 Gauge가 1이라 <b>두 조건을 다 빗나갔다</b> —
+                // 어느 쪽도 안 울려서 주먹 바람소리만 나고 건물이 조용히 무너졌다.
+                // 완파음(OnBroken)은 CloseOut에서 최대 1.2초 뒤에나 나오므로 그 사이가
+                // 통째로 비었다. 기획자: "마지막 타격시 타격 사운드가 발생하지 않고 무너지는 현상".
+                //
+                // 때린 것은 때린 소리가 나야 한다. 건너뛸 것은 겹치는 층 붕괴 쪽이다.
                 if (floorJustBlew && Gauge < 1f) fx.OnFloorCollapse(targetPoint);
-                else if (!floorJustBlew) fx.OnStrike(Gauge, targetPoint);
+                else fx.OnStrike(Gauge, targetPoint);
             }
 
             if (Gauge >= 1f) Finish();
