@@ -78,6 +78,7 @@ namespace Demo.Player
             public float DipY;      // 지금 하강에서 본 최저
             public bool Falling;    // 내려가는 중인가
             public bool Fresh;      // 아직 첫 프레임인가
+            public bool Primed;     // 걷기 시작 후 한 번이라도 착지했는가
         }
 
         /// <summary>
@@ -154,10 +155,17 @@ namespace Demo.Player
                 else if (f.Falling && y >= f.DipY + turnEpsilon)
                 {
                     // 바닥을 치고 올라오기 시작했다. 이 골이 바닥 기준에 닿았으면 착지다.
+                    //
+                    // <b>걷기 시작 뒤 첫 골은 조건 없이 받는다</b> [고침 2026-10-15].
+                    // 서 있을 때 발 높이(실측 5.7cm)와 걷기 바닥(13.3cm)이 7.6cm 떨어져 있어,
+                    // 기준이 선 자세에 묶여 있으면 <see cref="floorRise"/>로 올라오는 데
+                    // 1.5초가 걸린다. 그동안 착지가 다 걸러져 <b>걷기 시작하고 한참 뒤에야
+                    // 첫 발소리가 났다.</b> 첫 골에 기준을 묶어 두면 그 다음부터는 정상이다.
                     f.Falling = false;
-                    if (f.DipY <= f.Floor + plantMargin)
+                    if (!f.Primed || f.DipY <= f.Floor + plantMargin)
                     {
                         f.Floor = f.DipY;        // 기준을 이번 착지에 다시 묶는다
+                        f.Primed = true;
                         hits++;
                     }
                 }

@@ -29,8 +29,11 @@ namespace Demo.Data
             [Range(0f, 2f), Tooltip("음량 배율")]
             public float volume = 1f;
 
-            [Range(0f, 0.4f), Tooltip("음높이를 위아래로 흔드는 폭. 0이면 매번 똑같이 들린다")]
-            public float pitchJitter = 0.08f;
+            [Range(0f, 0.4f),
+             Tooltip("음높이를 위아래로 흔드는 폭. 0이면 매번 똑같이 들린다.\n\n" +
+                     "<b>기본값은 0이다</b> [지시 2026-10-15]: \"사운드 가공없이\". " +
+                     "받아 온 음원을 그대로 들려줘야 하므로 재생할 때도 음을 옮기지 않는다")]
+            public float pitchJitter;
 
             [Tooltip("같은 소리를 다시 내기까지의 최소 간격(초). " +
                      "0이면 안 막는다. 한 프레임에 여러 개가 겹쳐 울리는 것을 막는 값이다")]
