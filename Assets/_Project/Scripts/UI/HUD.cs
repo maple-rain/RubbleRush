@@ -81,7 +81,7 @@ namespace Demo.UI
 
             float timeH = line * 1.2f;
             float pipsH = line * 0.42f;
-            float gradeLabelH = line * 0.78f;   // 등급 글자가 앉는 띄. 막대 바로 위다
+            float gradeLabelH = line * 0.78f;   // 등급 글자가 앉는 띠. 막대 바로 위다
             int levels = Levels();
             bool showPips = hole != null && levels > 0;
 
