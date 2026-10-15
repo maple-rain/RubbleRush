@@ -99,6 +99,19 @@ namespace Demo.Core
 
             Shuffle(into);
 
+            // <b>그 단계에 꼭 넣기로 한 카드는 맨 앞으로</b> [지시 2026-10-15].
+            //
+            // 기획자: "5단계 선택지에 따라오는 선택지를 넣고, 6단계에서는 건물을 삼키는
+            // 선택지를 넣으라고." 무작위에 맡기면 그 단계에 안 뽑히는 일이 실제로 났다.
+            // 자르기 전에 앞으로 당겨 두면 반드시 살아남는다.
+            for (int i = into.Count - 1; i >= 0; i--)
+                if (into[i].guaranteed && into[i].unlockStage == stage)
+                {
+                    GameConfig.Upgrade must = into[i];
+                    into.RemoveAt(i);
+                    into.Insert(0, must);
+                }
+
             int want = Mathf.Max(1, cfg.upgradeChoices);
             if (!lastOnly && into.Count > want) into.RemoveRange(want, into.Count - want);
             return into;

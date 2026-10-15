@@ -125,8 +125,14 @@ namespace Demo.Destruction
             if (s >= 1f) Finish();
         }
 
-        /// <summary>다 빨려들었을 때 남는 크기 비율. 1이면 그대로다.</summary>
-        const float shrinkTo = 0.45f;
+        /// <summary>
+        /// 다 빨려들었을 때 남는 크기 비율. 1이면 그대로다.
+        ///
+        /// <b>0.80까지 올렸다</b> [고침 2026-10-15]. 구멍을 지름 8m로 키우고 나니
+        /// 건물이 실제로 구멍 안에 들어가므로, 억지로 줄일 이유가 없어졌다.
+        /// 많이 줄이면 '먹힌다'가 아니라 '사라진다'로 보인다.
+        /// </summary>
+        const float shrinkTo = 0.80f;
 
         /// <summary>제 축을 따라 미끄러져 들어가는 거리(m). 건물 높이에서 잡는다.</summary>
         float slideDepth = 6f;

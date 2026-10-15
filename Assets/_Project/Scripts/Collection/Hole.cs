@@ -96,8 +96,7 @@ namespace Demo.Collection
             }
             else if ((driftTarget - here).sqrMagnitude < 0.25f)
             {
-                Vector2 r = Random.insideUnitCircle * cfg.holeDriftRadius;
-                driftTarget = origin + new Vector3(r.x, 0f, r.y);
+                driftTarget = PickReachable(cfg, here);
             }
 
             transform.position = Vector3.MoveTowards(here, driftTarget,
@@ -323,6 +322,48 @@ namespace Demo.Collection
         /// <b>부숴서 나왔을 잔해와 같은 값을 준다</b> — 통째로 삼키는 쪽이 이득이면
         /// 부수는 행동이 의미를 잃고, 손해면 카드를 고를 이유가 없다.
         /// </summary>
+        /// <summary>
+        /// <b>플레이어가 갈 수 있는 자리</b>를 고른다 [지시 2026-10-15].
+        ///
+        /// 전에는 반경 안에서 그냥 무작위로 집었다. 그러면 <b>건물 한가운데</b>가 나올 수 있고,
+        /// 거기로 간 구멍에는 플레이어가 걸어갈 수가 없다 — 짐을 안고 쫓아갈 자리가
+        /// 막혀 버리는 것이다. 기획자: "구멍이 플레이어는 가지 못하는곳으로 이동하지 않게."
+        ///
+        /// 서 있는 건물의 토대에 걸리지 않는 자리를 몇 번 다시 뽑는다. 끝까지 못 찾으면
+        /// <b>지금 자리에 머문다</b> — 못 갈 데로 가느니 안 움직이는 쪽이 낫다.
+        /// </summary>
+        Vector3 PickReachable(GameConfig cfg, Vector3 here)
+        {
+            const int Tries = 12;
+            for (int n = 0; n < Tries; n++)
+            {
+                Vector2 r = Random.insideUnitCircle * cfg.holeDriftRadius;
+                Vector3 at = origin + new Vector3(r.x, 0f, r.y);
+                if (Clear(at)) return new Vector3(at.x, here.y, at.z);
+            }
+            return here;
+        }
+
+        /// <summary>그 자리가 서 있는 건물에 막혀 있지 않은가. 구멍 테두리까지 본다.</summary>
+        bool Clear(Vector3 at)
+        {
+            var list = Destruction.Destructible.Active;
+            if (list == null) return true;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                Destruction.Destructible d = list[i];
+                if (d == null || !d.isActiveAndEnabled) continue;
+                if (d.Current == Destruction.Destructible.State.Rubble) continue;  // 토대는 밟고 지나간다
+
+                d.FoundationFootprint(out Vector3 c, out float hx, out float hz);
+                // 구멍이 건물에 물리지 않으려면 테두리만큼 더 떨어져야 한다
+                if (Mathf.Abs(at.x - c.x) < hx + Radius) 
+                    if (Mathf.Abs(at.z - c.z) < hz + Radius) return false;
+            }
+            return true;
+        }
+
         void OnBuildingSwallowed(Destruction.Destructible d, int units,
                                  GameConfig cfg, GameLoop loop)
         {

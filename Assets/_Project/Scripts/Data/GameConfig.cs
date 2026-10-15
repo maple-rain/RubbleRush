@@ -183,6 +183,12 @@ namespace Demo.Data
                      "마지막 단계용이다 — 앞에서 안 고른 카드가 섞여 올라오면 " +
                      "'다 키운 것에 대한 보상'이라는 뜻이 흐려진다")]
             public bool exclusive;
+
+            [Tooltip("켜면 <b>그 단계에서 반드시 내민다</b> — 무작위에 맡기지 않는다 " +
+                     "[지시 2026-10-15: \"5단계 선택지에 따라오는 선택지를 넣고\"].\n\n" +
+                     "exclusive와 다르다. exclusive는 '이것만', 이것은 '이것은 꼭'이다. " +
+                     "나머지 자리는 평소처럼 쌓인 것 중에서 채운다")]
+            public bool guaranteed;
         }
 
         /// <summary>
