@@ -138,10 +138,6 @@ namespace Demo.Player
             // FootPlant.cs 참조.
             foot.Bind(transform);
 
-            // 실시간 그림자를 껐으므로 발밑에 둥근 그림자를 깔아 둔다
-            // [지시 2026-10-15]. 없으면 로봇이 바닥에서 떠 보인다. BlobShadow.cs 참조.
-            Utils.BlobShadow.Ensure(player != null ? player.transform : transform, blobShadowSize);
-
             // 이름으로 찾는다. 층 순서를 바꿔도 따라온다.
             for (int i = 0; i < anim.layerCount; i++)
             {
@@ -153,6 +149,21 @@ namespace Demo.Player
             // 상체는 늘 켜 둔다. 컨트롤러의 defaultWeight도 1이지만, 이전 버전이 0으로
             // 저장해 둔 컨트롤러를 만나도 같게 굴러가도록 여기서 한 번 더 못 박는다.
             if (upperLayer >= 0) anim.SetLayerWeight(upperLayer, 1f);
+
+            // 발밑 둥근 그림자 [지시 2026-10-15: "실시간 그림자 끄자"].
+            //
+            // <b>맨 끝에서, 감싸서 부른다.</b> 전에는 Awake 한가운데에서 불렀는데
+            // 거기서 예외가 나자 <b>그 아래의 레이어 찾기가 통째로 안 돌았다</b> —
+            // upperLayer가 -1로 남아 타격 자세가 어긋났다. 곁다리 연출 하나가
+            // 로봇의 움직임을 망가뜨릴 수는 없다.
+            try
+            {
+                Utils.BlobShadow.Ensure(player != null ? player.transform : transform, blobShadowSize);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[PlayerAnimator] 발밑 그림자를 못 만들었다 — 움직임은 그대로다: " + e.Message);
+            }
 
             // 뼈를 한 번만 찾아 둔다 (규칙 5).
             posture.Bind(transform);

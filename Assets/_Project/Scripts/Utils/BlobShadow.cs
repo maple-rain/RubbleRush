@@ -69,10 +69,17 @@ namespace Demo.Utils
         void Build()
         {
             // 바닥에 눕힌 사각형 하나. Quad는 기본이 수직이라 눕혀 둔다.
-            var mf = gameObject.GetComponent<MeshFilter>() ?? gameObject.AddComponent<MeshFilter>();
+            // <b>?? 를 쓰면 안 된다</b> [고침 2026-10-15]. 유니티의 Object는 '가짜 null'이라
+            // GetComponent가 없을 때 돌려주는 값이 C#의 null과 다르게 동작한다 —
+            // ?? 가 왼쪽을 '있다'로 보고 넘어가서, 붙이지도 않은 MeshFilter를 건드리다
+            // MissingComponentException이 났다. 그 예외가 Awake를 끊어
+            // <b>그 아래 줄들이 통째로 안 돌았다.</b>
+            var mf = gameObject.GetComponent<MeshFilter>();
+            if (mf == null) mf = gameObject.AddComponent<MeshFilter>();
             mf.sharedMesh = Quad();
 
-            skin = gameObject.GetComponent<MeshRenderer>() ?? gameObject.AddComponent<MeshRenderer>();
+            skin = gameObject.GetComponent<MeshRenderer>();
+            if (skin == null) skin = gameObject.AddComponent<MeshRenderer>();
             skin.sharedMaterial = Mat();
             skin.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             skin.receiveShadows = false;
