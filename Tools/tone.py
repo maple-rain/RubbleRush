@@ -5,8 +5,12 @@
 기획자가 "하이피치를 올려/줄여"라고 할 때 원하는 것이 이것이다 —
 소리가 날카로워지거나 부드러워질 뿐, 음은 그대로다.
 
-**원본은 git에 있다.** 제자리에서 덮어쓰므로 다시 돌리려면 먼저 되돌려야 한다:
-    git checkout -- Assets/_Project/Audio/SFX/SFX_TowLoop_01.wav
+**두 번 돌리면 두 번 깎인다.** 제자리에서 덮어쓰므로 이미 처리된 파일에 다시 돌리면
+효과가 쌓인다. 실제로 한 번 당했다 — `git checkout --`로 되돌렸는데 그 커밋에 이미
+깎인 것이 들어 있어서 `SFX_TowLoop_01`의 3k~8k가 5.7% -> 2.0% -> **0.6%**가 됐다.
+
+**되돌릴 때는 처리 전 커밋을 지정한다**(아래 `BEFORE`):
+    git checkout <BEFORE> -- Assets/_Project/Audio/SFX/SFX_TowLoop_01.wav
 
 쓰는 법:
     python Tools/tone.py            # 재기만 한다
@@ -21,11 +25,26 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 SFX = os.path.normpath(os.path.join(HERE, '..', 'Assets', '_Project', 'Audio', 'SFX'))
 
+# 처리 전 원본이 들어 있는 커밋. 다시 돌리려면 여기서 복구한 뒤 실행한다.
+#   git checkout 6eeddb7~1 -- "Assets/_Project/Audio/SFX/SFX_TowLoop_01.wav"
+#   git checkout 6342748   -- "Assets/_Project/Audio/SFX/SFX_Capture_0*.wav"
+BEFORE = {'SFX_TowLoop_01': '6eeddb7~1',
+          'SFX_Capture_01': '6342748',
+          'SFX_Capture_02': '6342748',
+          'SFX_Capture_03': '6342748'}
+
 # (파일, 이 주파수 위를, 몇 dB)
 JOBS = [
     # 견인 소리가 "너무 날것" [지시 2026-10-15]. 실측하면 1k~3k가 30.1%로
     # 거친 중고역이 많다. 끄는 내내 들리는 소리라 그 대역이 특히 피곤하다.
     ('SFX_TowLoop_01', 1500.0, -5.0),
+
+    # 케이블로 감쌌을 때 [지시 2026-10-15: "하이피치도 조금 낮춰줘"].
+    # 실측하면 변형끼리 밝기가 제각각이다 — 01은 3kHz 위 39%, 02는 <b>82%</b>, 03은 12%.
+    # 02가 유난히 쇳소리가 난다. 그래서 <b>밝은 둘만 더 깎는다.</b>
+    ('SFX_Capture_01', 2000.0, -5.0),
+    ('SFX_Capture_02', 2000.0, -8.0),
+    ('SFX_Capture_03', 2000.0, -3.0),
 ]
 
 
@@ -101,7 +120,9 @@ def main():
     print()
     print('음높이도 길이도 안 건드렸다 — 대역별 세기만 바뀐다.')
     if write:
-        print('덮어썼다. 되돌리려면 git checkout 으로 원본을 복구할 것.')
+        print('덮어썼다. <b>다시 돌리기 전에 반드시 처리 전 커밋에서 복구할 것</b> —')
+        for name, ref in BEFORE.items():
+            print('  git checkout %s -- "Assets/_Project/Audio/SFX/%s.wav"' % (ref, name))
     else:
         print('재기만 했다. 실제로 쓰려면 --write 를 붙일 것.')
     return 0
