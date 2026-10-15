@@ -141,8 +141,12 @@ D2에 실측하기 전까지의 작업 기준값이다. 초과하면 즉시 알�
 
 프로젝트 이름은 임시로 **FP**. 게임 이름이 정해지면 바꾼다. 네임스페이스는 `Demo.*` 유지.
 
-- [~] D1 셋업 — 프로젝트·폴더 구조·문서·gitignore 완료.
-      **Player Settings(IL2CPP·ARM64·API24·Landscape·Linear) · Unity Recorder · Main.unity · git init 미완**
+- [~] D1 셋업 — 프로젝트·폴더 구조·문서·gitignore·git·씬 완료.
+      **Player Settings도 완료** [실측 2026-10-15]: IL2CPP · ARM64 · Landscape 고정 ·
+      Linear · Input System · minSdk 25. 위 줄은 10-15까지 "전부 미완"으로 남아 있었는데
+      낡은 기록이었다. 남은 것은 둘뿐이다 —
+      **`applicationIdentifier`가 비어 있고**(`Demo/빌드/애플리케이션 ID 맞추기`),
+      **Unity Recorder가 설치되어 있지 않다**(트레일러를 찍을 수단이 없다).
 - [ ] D2 VARCO 파이프라인 실측
 - [ ] D5 코어 루프 + 스토어 첫 업로드
 
