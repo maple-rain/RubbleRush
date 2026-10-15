@@ -26,7 +26,7 @@ namespace Demo.UI
         enum Page { Title, Stages, Options, Playing }
 
         [SerializeField, Tooltip("화면에 띄울 이름. 게임 이름이 정해지면 바꾼다")]
-        string title = "철거";
+        string title = "Rubble Rush";
 
         [SerializeField, Tooltip("켜면 처음부터 바로 플레이로 들어간다. 검증용")]
         bool skipTitle = false;

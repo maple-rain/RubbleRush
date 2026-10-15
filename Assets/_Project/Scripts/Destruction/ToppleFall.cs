@@ -75,6 +75,11 @@ namespace Demo.Destruction
 
             // 다 넘어가면 구멍 한가운데로 미끄러져 들어간다.
             f.sinkTo = new Vector3(holeCenter.x, here.y - Mathf.Max(0.5f, holeDepth), holeCenter.z);
+
+            // 미끄러져 들어가는 거리는 <b>건물 높이</b>에서 잡는다. 낮은 건물이 깊이
+            // 파고들면 과하고, 높은 건물이 얕게 들어가면 반쯤 걸친 채로 사라진다.
+            float tall = target.Data != null ? target.Data.colliderSize.y : 3f;
+            f.slideDepth = tall * 1.3f;
             return f;
         }
 
@@ -99,20 +104,32 @@ namespace Demo.Destruction
             if (!sinking) { sinking = true; fallenFrom = body.position; fromScale = body.localScale; }
 
             float s = Mathf.Clamp01((t - tiltSeconds) / sinkSeconds);
-            body.position = Vector3.Lerp(fallenFrom, sinkTo, s * s);
 
-            // <b>작아지면서 들어간다</b> [고침 2026-10-15].
+            // <b>제 긴 축을 따라 비스듬히 박혀 들어간다</b> [지시 2026-10-15, 참고 그림].
             //
-            // 건물은 구멍보다 넓다. 크기를 그대로 두고 내리면 <b>구멍이 아니라 맨땅을
-            // 뚫고 내려가는 것처럼</b> 보인다 — 기획자가 "어색함과 불쾌함"이라고 한 그림이다.
-            // 빨려들수록 줄어들면 구멍이 삼키는 것으로 읽힌다.
+            // 수직으로 내리면 건물이 바닥을 뚫는 그림이 된다. 기울어진 채로 <b>자기
+            // 아래쪽(기운 방향)</b>으로 미끄러지면 판자가 입으로 들어가듯 끝부터 박힌다 —
+            // 기획자가 보여 준 그림이 그 모습이다.
+            //
+            // 동시에 구멍 한가운데로 조금씩 끌려간다. 안 그러면 비스듬히 선 채로
+            // 제자리에서 꺼져 버린다.
+            Vector3 along = -body.up;                    // 기운 만큼 비스듬한 '아래'
+            Vector3 slid = fallenFrom + along * (slideDepth * s * s);
+            Vector3 pulled = new Vector3(sinkTo.x, slid.y, sinkTo.z);
+            body.position = Vector3.Lerp(slid, pulled, s * 0.6f);
+
+            // <b>조금 줄어든다.</b> 건물이 구멍보다 넓어서 크기를 그대로 두면 가장자리가
+            // 땅을 뚫는다. 다만 많이 줄이면 '먹힌다'가 아니라 '사라진다'로 보여 살짝만 줄인다.
             body.localScale = Vector3.Lerp(fromScale, fromScale * shrinkTo, s);
 
             if (s >= 1f) Finish();
         }
 
-        /// <summary>다 빨려들었을 때 남는 크기 비율. 0이면 사라지고 1이면 그대로다.</summary>
-        const float shrinkTo = 0.25f;
+        /// <summary>다 빨려들었을 때 남는 크기 비율. 1이면 그대로다.</summary>
+        const float shrinkTo = 0.45f;
+
+        /// <summary>제 축을 따라 미끄러져 들어가는 거리(m). 건물 높이에서 잡는다.</summary>
+        float slideDepth = 6f;
 
         Vector3 fallenFrom, fromScale;
         bool sinking;

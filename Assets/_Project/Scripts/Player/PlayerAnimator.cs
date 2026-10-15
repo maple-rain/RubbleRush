@@ -35,6 +35,10 @@ namespace Demo.Player
         [SerializeField, Tooltip("발이 닿는 순간을 집어낸다. 자세한 설명은 FootPlant.cs에 있다")]
         FootPlant foot = new FootPlant();
 
+        [SerializeField, Range(0.5f, 6f),
+         Tooltip("발밑 둥근 그림자의 지름(m). 실시간 그림자를 껐으므로 이것이 대신한다")]
+        float blobShadowSize = 2.4f;
+
         [Header("타격 — 골반 비틀림")]
         [SerializeField, Range(4f, 80f), Tooltip("주먹이 나갈 때 골반 비틀림이 올라오는 속도")]
         float twistRise = 40f;
@@ -133,6 +137,10 @@ namespace Demo.Player
             // 발가락 뼈는 여기서 한 번만 찾는다. 발소리가 이 뼈의 높이로 난다 —
             // FootPlant.cs 참조.
             foot.Bind(transform);
+
+            // 실시간 그림자를 껐으므로 발밑에 둥근 그림자를 깔아 둔다
+            // [지시 2026-10-15]. 없으면 로봇이 바닥에서 떠 보인다. BlobShadow.cs 참조.
+            Utils.BlobShadow.Ensure(player != null ? player.transform : transform, blobShadowSize);
 
             // 이름으로 찾는다. 층 순서를 바꿔도 따라온다.
             for (int i = 0; i < anim.layerCount; i++)
