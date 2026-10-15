@@ -58,10 +58,17 @@ namespace Demo.Collection
                 float footprint = Mathf.Sqrt(halfX * halfX + halfZ * halfZ);
                 if (footprint > limit) continue;                 // 아직 이 구멍엔 너무 크다
 
-                // 토대와 구멍이 겹치는가. 건물은 상자라 가장 가까운 점으로 잰다.
-                float dx = Mathf.Max(0f, Mathf.Abs(at.x - center.x) - halfX);
-                float dz = Mathf.Max(0f, Mathf.Abs(at.z - center.z) - halfZ);
-                if (dx * dx + dz * dz > r * r) continue;
+                // <b>구멍이 건물 밑에 들어가 있어야 한다</b> [고침 2026-10-15].
+                //
+                // 전에는 "토대와 구멍이 닿기만 하면"이었다. 그러니 구멍이 모서리를 살짝
+                // 스치기만 해도 건물이 넘어가기 시작했고, 건물은 구멍보다 훨씬 넓으니
+                // <b>구멍이 아니라 맨땅으로 가라앉는 것처럼</b> 보였다.
+                // 기획자: "구멍에 들어가야하는거지 땅 속으로 들어가는건 아니니까."
+                //
+                // 구멍 <b>중심</b>이 토대 안에 들어와야 집는다. 그래야 건물 밑으로
+                // 구멍을 몰고 들어가는 동작이 생기고 — 그게 "요리조리 움직여서 넣는" 재미다.
+                if (Mathf.Abs(at.x - center.x) > halfX) continue;
+                if (Mathf.Abs(at.z - center.z) > halfZ) continue;
 
                 Destructible taken = d;
                 int units = UnitsOf(taken, cfg);

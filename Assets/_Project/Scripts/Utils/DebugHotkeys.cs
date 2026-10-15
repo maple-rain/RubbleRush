@@ -67,9 +67,54 @@ namespace Demo.Utils
             if (kb.f4Key.wasPressedThisFrame) BreakNearest();
 
             if (kb.f5Key.wasPressedThisFrame) RebuildZone();
+
+            // F6 — 구멍이 왜 잔해를 안 먹는지 콘솔에 적는다 [지시 2026-10-15].
+            // 재현이 안 되는 증상이라, 그 순간에 눌러 이유를 남기게 한다.
+            if (kb.f6Key.wasPressedThisFrame) ReportHole();
         }
 
         /// <summary>가장 가까운 구조물을 즉시 부순다. 잔해를 빨리 쌓아 폐합을 시연할 때 쓴다.</summary>
+        /// <summary>
+        /// 구멍 둘레의 잔해가 <b>왜 안 들어가는지</b> 한 줄씩 적는다 [지시 2026-10-15].
+        ///
+        /// "잔해가 들어가지 않는 현상"이 재현되지 않아서, 그 순간에 눌러 상태를 남기도록
+        /// 만들었다. 막는 이유는 셋 중 하나다 — 너무 크거나, 너무 멀거나, 이미 빠지는 중이거나.
+        /// </summary>
+        void ReportHole()
+        {
+            var hole = GameLoop.Instance != null ? GameLoop.Instance.ActiveHole : null;
+            var cfg = GameConfigRef.Current;
+            if (hole == null || cfg == null) { Debug.Log("[F6] 구멍이나 설정이 없다"); return; }
+
+            float margin = cfg.holeSuctionMargin * Core.Upgrades.Mul(Core.Upgrades.WiderSuction);
+            float reach = hole.Radius + margin;
+            var at = new Vector2(hole.transform.position.x, hole.transform.position.z);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("[F6] 구멍 " + (hole.Level + 1) + "단계 · 반지름 "
+                + hole.Radius.ToString("0.00") + "m · 흡인 끝 " + reach.ToString("0.00") + "m");
+            sb.AppendLine("     삼킨 단위 " + hole.SwallowedUnits
+                + " · 잔해 " + Collection.Debris.Active.Count + "개"
+                + " · 삼킴카드 " + Core.Upgrades.Has(Core.Upgrades.Swallow));
+
+            int shown = 0;
+            foreach (Collection.Debris d in Collection.Debris.Active)
+            {
+                if (d == null) continue;
+                float dist = Vector2.Distance(d.FlatPosition, at);
+                if (dist > reach + 4f || shown++ >= 10) continue;
+
+                string why = d.IsFalling ? "이미 빠지는 중"
+                    : !d.FitsInHole(hole.Radius) ? "너무 크다(반지름 " + d.SizeRadius.ToString("0.00") + ")"
+                    : dist <= hole.Radius ? "구멍 안 — 다음 프레임에 먹힌다"
+                    : dist <= reach ? "당기는 중" : "흡인 범위 밖";
+                sb.AppendLine("     " + dist.ToString("0.00") + "m  반지름 "
+                    + d.SizeRadius.ToString("0.00") + "  " + why);
+            }
+            if (shown == 0) sb.AppendLine("     구멍 둘레에 잔해가 없다");
+            Debug.Log(sb.ToString());
+        }
+
         void BreakNearest()
         {
             if (loop == null || spawner == null) return;

@@ -91,20 +91,30 @@ namespace Demo.Destruction
                 return;
             }
 
-            // ② 다 기울었으면 구멍으로 가라앉는다.
+            // ② 다 기울었으면 구멍으로 빨려든다.
             Spin(tiltDegrees);
 
             // <b>가라앉기 시작하는 자리는 '다 기운 뒤'의 자리다</b>. 기울기 전에 잡으면
             // 회전으로 옮겨 간 만큼을 무시하게 되어 건물이 한 번 튄다.
-            if (!sinking) { sinking = true; fallenFrom = body.position; }
+            if (!sinking) { sinking = true; fallenFrom = body.position; fromScale = body.localScale; }
 
             float s = Mathf.Clamp01((t - tiltSeconds) / sinkSeconds);
             body.position = Vector3.Lerp(fallenFrom, sinkTo, s * s);
 
+            // <b>작아지면서 들어간다</b> [고침 2026-10-15].
+            //
+            // 건물은 구멍보다 넓다. 크기를 그대로 두고 내리면 <b>구멍이 아니라 맨땅을
+            // 뚫고 내려가는 것처럼</b> 보인다 — 기획자가 "어색함과 불쾌함"이라고 한 그림이다.
+            // 빨려들수록 줄어들면 구멍이 삼키는 것으로 읽힌다.
+            body.localScale = Vector3.Lerp(fromScale, fromScale * shrinkTo, s);
+
             if (s >= 1f) Finish();
         }
 
-        Vector3 fallenFrom;
+        /// <summary>다 빨려들었을 때 남는 크기 비율. 0이면 사라지고 1이면 그대로다.</summary>
+        const float shrinkTo = 0.25f;
+
+        Vector3 fallenFrom, fromScale;
         bool sinking;
         float appliedDegrees;
 
@@ -127,7 +137,13 @@ namespace Demo.Destruction
             var d = target;
             var cb = done;
             done = null;
-            if (d != null) d.gameObject.SetActive(false);
+            if (d != null)
+            {
+                // 풀로 돌아갈 수 있으니 <b>크기를 되돌려 놓고</b> 끈다.
+                // 줄어든 채로 남으면 다음에 쓸 때 작은 건물이 선다.
+                if (fromScale != Vector3.zero) d.transform.localScale = fromScale;
+                d.gameObject.SetActive(false);
+            }
             Destroy(this);
             cb?.Invoke(d);
         }
