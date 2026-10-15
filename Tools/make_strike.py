@@ -68,6 +68,16 @@ GROUPS = {
 # 묶음마다 고역을 얼마나 올릴지(dB). 음을 옮기는 것이 아니라 대역 세기다.
 TREBLE = {'Boom': 4.0, 'Strike': 4.0, 'Punch': 0.0, 'Barrage': 2.0}
 
+# <b>정점을 같은 자리에 맞춘다</b> [지시 2026-10-15]. (앞으로 둘 시간, 전체 길이) 초.
+#
+# 휘두름 소리는 주먹이 나가는 순간에 틀고 타격은 165ms 뒤에 온다. 그런데 원본 여덟 장은
+# 제일 센 지점이 133ms에서 765ms까지 <b>632ms나 흩어져 있었다</b> — 어느 장이 뽑히느냐에
+# 따라 바람소리가 주먹과 맞기도 하고 600ms 늦게 나기도 했다.
+# 게다가 길이가 1.57초까지라 연타(0.19초 간격)에서 아홉 개가 겹쳤다.
+#
+# 정점을 0.13초에 두면 타격(0.165초)보다 35ms 먼저 분다 — 스쳐 지나가고 맞는 순서다.
+ALIGN = {'Punch': (0.13, 0.34)}
+
 SILENCE_DB = -45.0      # 이 아래는 무음으로 본다 (파일 피크 기준)
 JOIN = 0.08             # 이보다 짧게 끊기는 틈은 같은 한 타로 본다(초)
 MIN_HIT = 0.15          # 이보다 짧으면 타격이 아니라 잡음 조각이다(초)
@@ -164,6 +174,38 @@ def shelf(x, from_hz, gain_db):
     return y * (0.999 / peak) if peak > 0.999 else y
 
 
+def align_peak(x, lead, total):
+    """
+    <b>제일 센 지점이 항상 같은 자리에 오게</b> 잘라 낸다.
+
+    앞이 모자라면 무음을 채우고, 남으면 버린다. 뒤는 <paramref name="total"/>까지만 쓰고
+    끝 20%를 내려 끊기는 소리를 없앤다. <b>소리 자체는 안 건드린다</b> — 어느 구간을
+    가져올지만 정한다.
+    """
+    # <b>샘플 하나의 최대값이 아니라 포락선의 봉우리를 쓴다.</b>
+    # 바람소리는 과도음이 없어서 어느 한 샘플이 제일 큰지가 들쭉날쭉하다 —
+    # 그걸 기준으로 맞추니 여덟 장이 40~130ms로 90ms 어긋났다.
+    # 20ms로 고르게 편 다음 보면 '소리가 제일 센 구간'이 잡힌다.
+    k = max(1, int(SR * 0.020))
+    env = np.convolve(np.abs(x), np.ones(k) / k, 'same')
+    top = int(np.argmax(env))
+    want_lead = int(SR * lead)
+    n = int(SR * total)
+
+    start = top - want_lead
+    if start >= 0:
+        y = x[start:start + n]
+    else:
+        y = np.concatenate([np.zeros(-start), x[:n + start]])
+    if y.size < n:
+        y = np.pad(y, (0, n - y.size))
+
+    y = y.copy()
+    k = max(1, int(y.size * 0.20))
+    y[-k:] *= np.linspace(1.0, 0.0, k) ** 1.5
+    return y
+
+
 def heard(x):
     """
     <b>귀가 듣는 크기.</b> 300Hz~6kHz 대역의 세기로 잰다.
@@ -221,7 +263,10 @@ def main():
             found = hits(x)
             print('  [%s] %-28s %5.2f초 -> %d개' % (group, name[:-4], x.size / float(SR), len(found)))
             for k, (a, b) in enumerate(found):
-                pieces.append(shelf(cut(x, a, b), TREBLE_FROM, TREBLE.get(group, 0.0)))
+                piece = cut(x, a, b)
+                if group in ALIGN:
+                    piece = align_peak(piece, ALIGN[group][0], ALIGN[group][1])
+                pieces.append(shelf(piece, TREBLE_FROM, TREBLE.get(group, 0.0)))
                 labels.append('%s%s' % (name[:-4], '' if len(found) == 1 else ' #%d' % (k + 1)))
 
         if not pieces:
