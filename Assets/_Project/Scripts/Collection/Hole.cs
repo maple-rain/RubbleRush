@@ -45,6 +45,9 @@ namespace Demo.Collection
         Transform visual;
         Vector3 origin, driftTarget;
 
+        /// <summary>플레이어가 지나온 자리. "따라오는 구멍"이 이것을 밟고 간다.</summary>
+        readonly HoleTrail trail = new HoleTrail();
+
         void Awake()
         {
             // 스케일은 자식에만 준다. 루트를 늘이면 자식 연출까지 같이 늘어난다.
@@ -60,6 +63,7 @@ namespace Demo.Collection
             SwallowedUnits = 0;
             origin = transform.position;
             driftTarget = origin;
+            trail.Clear();          // 지난 판의 자취를 끌고 오지 않는다
             ApplyLevel();
         }
 
@@ -82,16 +86,24 @@ namespace Demo.Collection
 
             if (follows)
             {
+                // <b>플레이어가 밟은 자리만 따라간다</b> [지시 2026-10-15].
+                //
+                // 전에는 플레이어 쪽으로 직선으로 가되 "시작점에서 45m" 원에 묶었다.
+                // 그 원은 구역 가장자리에 박혀 있어서 39채 중 18채(46%)가 밖이었고,
+                // 원 안이면 건물 속도 지나다녔다 — 갈 수 있는 곳은 못 가고 못 가는 곳은
+                // 가는, 거꾸로 된 제한이었다. 자세한 것은 HoleTrail.cs에 적어 뒀다.
+                //
+                // 이제 범위를 숫자가 아니라 <b>플레이어가 정한다.</b>
                 Transform p = Player();
                 if (p != null)
                 {
-                    // 쫓아가되 구역 밖으로는 안 나간다 — 최초 위치 반경 제한은 그대로다.
-                    Vector3 want = new Vector3(p.position.x, here.y, p.position.z);
-                    Vector3 off = want - origin;
-                    off.y = 0f;
-                    float lim = cfg.holeDriftRadius;
-                    if (off.sqrMagnitude > lim * lim) off = off.normalized * lim;
-                    driftTarget = new Vector3(origin.x + off.x, here.y, origin.z + off.z);
+                    // 간격은 반지름의 절반 — 새 수치가 아니라 구멍 크기에서 끌어온다.
+                    trail.Record(p.position, Radius * 0.5f);
+
+                    // 자취가 아직 없으면(카드를 막 골랐다) 플레이어를 직접 본다.
+                    // 한두 프레임이면 자취가 차고, 그다음부터는 자취가 맡는다.
+                    if (!trail.Next(here, Radius, out driftTarget))
+                        driftTarget = new Vector3(p.position.x, here.y, p.position.z);
                 }
             }
             else if ((driftTarget - here).sqrMagnitude < 0.25f)
@@ -125,6 +137,9 @@ namespace Demo.Collection
         /// [지시 2026-10-14]. 안 움직이고 있으면 <see cref="IsDrifting"/>가 false다.
         /// </summary>
         public Vector3 DriftTarget => driftTarget;
+
+        /// <summary>아직 밟지 않은 자취 점의 수. F6 진단용이다.</summary>
+        public int TrailCount => trail.Count;
 
         /// <summary>
         /// 지금 스스로 움직이는 중인가.

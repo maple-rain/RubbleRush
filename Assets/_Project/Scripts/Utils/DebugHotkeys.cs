@@ -96,6 +96,10 @@ namespace Demo.Utils
             sb.AppendLine("     삼킨 단위 " + hole.SwallowedUnits
                 + " · 잔해 " + Collection.Debris.Active.Count + "개"
                 + " · 삼킴카드 " + Core.Upgrades.Has(Core.Upgrades.Swallow));
+            sb.AppendLine("     따라오기 " + Core.Upgrades.Has(Core.Upgrades.HoleFollows)
+                + " · 남은 자취 " + hole.TrailCount + "점"
+                + " · 목적지까지 "
+                + Vector3.Distance(hole.transform.position, hole.DriftTarget).ToString("0.0") + "m");
 
             int shown = 0;
             foreach (Collection.Debris d in Collection.Debris.Active)
