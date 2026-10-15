@@ -38,14 +38,32 @@ OUT = os.path.join(HERE, '..', 'Assets', '_Project', 'Audio', 'SFX')
 DEFAULT_SRC = os.path.join(os.path.expanduser('~'), 'Downloads')
 
 # 받은 음원. 한 파일에서 온전한 타격을 전부 떼어 쓴다.
-SOURCES = ['firecracker_bang (1).wav',
-           'firecracker_bang (2).wav',
-           'firecracker_bang (3).wav',
-           'cannon_fire (1).wav',
-           'cannon_fire (2).wav',
-           'cannon_fire (3).wav',
-           'fighting_sound (1).wav',
-           'punch_impact (1).wav']          # 있으면 쓴다. 없으면 조용히 건너뛴다
+#
+# <b>묶음마다 쓰임이 다르다</b> [지시 2026-10-15]:
+#   Strike  = 적중. 부딪힌 물체에서 나는 소리
+#   Whoosh  = 휘두름. 주먹이 공기를 가르는 소리 (소닉붐 자리)
+#   Barrage = 연타 뭉치. 한 조각이 0.7~2.1초라 한 대씩이 아니라 몰아칠 때 쓴다
+GROUPS = {
+    'Strike': ['firecracker_bang (1).wav',
+               'firecracker_bang (2).wav',
+               'firecracker_bang (3).wav',
+               'cannon_fire (1).wav',
+               'cannon_fire (2).wav',
+               'cannon_fire (3).wav',
+               'fighting_sound (1).wav'],
+    'Impact': ['Heavy body impact_1.wav',
+               'Heavy body impact_2.wav',
+               'Heavy body impact_3.wav'],
+    'Whoosh': ['Fast movement whoosh_1.wav',
+               'Fast movement whoosh_2.wav',
+               'Fast movement whoosh_3.wav'],
+    'Barrage': ['Rapid punch barrage_1.wav',
+                'Rapid punch barrage_2.wav',
+                'Rapid punch barrage_3.wav'],
+}
+
+# 묶음마다 고역을 얼마나 올릴지(dB). 음을 옮기는 것이 아니라 대역 세기다.
+TREBLE = {'Strike': 4.0, 'Impact': 4.0, 'Whoosh': 0.0, 'Barrage': 2.0}
 
 SILENCE_DB = -45.0      # 이 아래는 무음으로 본다 (파일 피크 기준)
 JOIN = 0.08             # 이보다 짧게 끊기는 틈은 같은 한 타로 본다(초)
@@ -188,51 +206,47 @@ def main():
 
     os.makedirs(os.path.normpath(OUT), exist_ok=True)
 
-    pieces, labels = [], []
-    for name in SOURCES:
-        path = os.path.join(src, name)
-        if not os.path.exists(path):
-            print('  %-24s 없음 — 건너뜀' % name[:-4])
+    total = 0
+    for group, files in GROUPS.items():
+        pieces, labels = [], []
+        for name in files:
+            path = os.path.join(src, name)
+            if not os.path.exists(path):
+                print('  [%s] %-28s 없음 — 건너뜀' % (group, name[:-4]))
+                continue
+            x = load(path)
+            found = hits(x)
+            print('  [%s] %-28s %5.2f초 -> %d개' % (group, name[:-4], x.size / float(SR), len(found)))
+            for k, (a, b) in enumerate(found):
+                pieces.append(shelf(cut(x, a, b), TREBLE_FROM, TREBLE.get(group, 0.0)))
+                labels.append('%s%s' % (name[:-4], '' if len(found) == 1 else ' #%d' % (k + 1)))
+
+        if not pieces:
             continue
-        x = load(path)
-        found = hits(x)
-        print('  %-24s %5.2f초 -> 온전한 타격 %d개' % (name[:-4], x.size / float(SR), len(found)))
-        for k, (s, e) in enumerate(found):
-            piece = cut(x, s, e)
-            pieces.append(shelf(piece, TREBLE_FROM, TREBLE_DB))
-            labels.append('%s%s' % (name[:-4], '' if len(found) == 1 else ' #%d' % (k + 1)))
-            print('        %6.0f~%6.0fms  길이 %5.0fms' % (s * 1000.0 / SR, e * 1000.0 / SR,
-                                                          piece.size * 1000.0 / SR))
+        before = [db(np.sqrt((p ** 2).mean())) for p in pieces]
+        if MATCH_LEVEL:
+            pieces = match_level(pieces)
 
-    if not pieces:
-        print('타격을 하나도 못 찾았다.')
-        return 1
+        longest = 0.0
+        for i, p in enumerate(pieces):
+            nm = 'SFX_%s_%02d' % (group, i + 1)
+            if write:
+                save(nm, p)
+            longest = max(longest, p.size / float(SR))
+            print('      %-18s %-26s %5.0fms  피크%6.1f  RMS%6.1f (전%6.1f)'
+                  % (nm, labels[i], p.size * 1000.0 / SR,
+                     db(np.max(np.abs(p))), db(np.sqrt((p ** 2).mean())), before[i]))
+        print('      -> %s %d장 · 제일 긴 것 %.2f초 · 고역 %+.1fdB'
+              % (group, len(pieces), longest, TREBLE.get(group, 0.0)))
+        print()
+        total += len(pieces)
 
-    before = [db(np.sqrt((p ** 2).mean())) for p in pieces]
-    if MATCH_LEVEL:
-        pieces = match_level(pieces)
-
-    print()
-    longest = 0.0
-    for i, p in enumerate(pieces):
-        name = 'SFX_Strike_%02d' % (i + 1)
-        if write:
-            save(name, p)
-        longest = max(longest, p.size / float(SR))
-        print('  %s  %-24s %5.0fms  피크%6.1fdB  RMS%6.1fdB (맞추기 전%6.1f)'
-              % (name, labels[i], p.size * 1000.0 / SR,
-                 db(np.max(np.abs(p))), db(np.sqrt((p ** 2).mean())), before[i]))
-
-    print()
-    print('%d개. 길이를 정하지 않았다 — 소리가 끝나는 곳이 끝이다 (제일 긴 것 %.2f초).'
-          % (len(pieces), longest))
-    print('음원에 한 일: 앞뒤 무음 떼기 · 끝 8ms 내리기 · 크기 맞추기 · 고역 %+.1fdB.' % TREBLE_DB)
-    print('섞지 않았고, 음높이도 길이도 그대로다 — 고역만 %d Hz 위에서 올렸다.' % TREBLE_FROM)
-    print('연타는 초당 다섯 번이라 %.0f개까지 겹친다 — SfxPool 음성 수가 그만큼 있어야 한다.'
-          % (longest / 0.2 + 1))
+    print('모두 %d장. 길이를 정하지 않았다 — 소리가 끝나는 곳이 끝이다.' % total)
+    print('음원에 한 일: 앞뒤 무음 떼기 · 끝 8ms 내리기 · 묶음 안에서 크기 맞추기 · 고역.')
+    print('섞지 않았고, 음높이도 길이도 그대로다.')
     print()
     if write:
-        print('덮어썼다. 유니티가 다시 불러온다. 사운드뱅크에 %d장을 물려야 한다.' % len(pieces))
+        print('덮어썼다. 사운드뱅크 연결은 따로 해야 한다.')
     else:
         print('재기만 했다. 실제로 쓰려면 --write 를 붙일 것.')
     return 0
