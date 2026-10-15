@@ -61,6 +61,23 @@ namespace Demo.Data
         [Tooltip("흡인 판정 여유(m). 반경 + 이 값 안에 들어오면 빨려든다 — 정확히 올릴 필요 없다")]
         public float holeSuctionMargin;
 
+        [Header("건물 삼킴 — 6단계 카드 [지시 2026-10-15]")]
+        [Tooltip("구멍 반지름의 몇 배까지 넘어뜨릴 수 있는가.\n\n" +
+                 "실측: 6단계 구멍 반지름 1.74m. 건물 토대 외접반지름은 Pillar 1.08 / " +
+                 "Plank·T1 1.41 / T2 2.14 / T3 2.35 / Wall 2.53 / T7 3.09 / " +
+                 "T4·Frame 4.04 / T6 5.38 / T5·Core 8.07m다.\n" +
+                 "1.5면 2.61m까지 — T3Normal까지 넘어간다. 2.0이면 3.48m로 T7Glass까지다")]
+        public float swallowReach = 1.5f;
+
+        [Tooltip("넘어가는 데 걸리는 시간(초). 짧으면 툭 쓰러지고 길면 무겁다")]
+        public float swallowTiltSeconds = 0.9f;
+
+        [Tooltip("다 넘어간 뒤 구멍으로 가라앉는 시간(초)")]
+        public float swallowSinkSeconds = 0.5f;
+
+        [Tooltip("얼마나 기우는가(도). 90이면 완전히 눕는다")]
+        public float swallowTiltDegrees = 85f;
+
         [Tooltip("흡인 범위 안의 잔해가 구멍으로 끌려오는 속도(m/s). " +
                  "가까울수록 세게 당긴다 — 균일하게 당기면 멀리서부터 질질 끌려와 " +
                  "'빨려드는' 느낌이 안 난다")]

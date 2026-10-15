@@ -26,7 +26,21 @@ namespace Demo.Destruction
             c != null && s_byCollider.TryGetValue(c, out Destructible d) ? d : null;
 
         /// <summary>씬을 다시 지을 때 호출한다.</summary>
-        public static void ClearRegistry() => s_byCollider.Clear();
+        public static void ClearRegistry() { s_byCollider.Clear(); s_all.Clear(); }
+
+        static readonly List<Destructible> s_all = new List<Destructible>();
+
+        /// <summary>
+        /// 지금 구역에 서 있는 건물 전부 [더함 2026-10-15].
+        ///
+        /// <b>왜 목록이 필요한가.</b> 지금까지 건물을 찾는 길은 Collider를 통하는 것뿐이었다
+        /// (<see cref="From"/>) — 때릴 때는 맞은 콜라이더가 손에 쥐어지니 그걸로 충분했다.
+        /// 그런데 <b>구멍이 건물을 삼키려면</b> 맞은 것이 아니라 <b>근처에 있는 것</b>을
+        /// 훑어야 한다. <see cref="Collection.Debris.Active"/>와 같은 꼴로 둔다.
+        ///
+        /// 매 프레임 <c>FindObjectsByType</c>을 돌릴 수는 없다 (CLAUDE.md 규칙 5).
+        /// </summary>
+        public static IReadOnlyList<Destructible> Active => s_all;
 
         public StructureData Data { get; private set; }
         public State Current { get; private set; } = State.Intact;
@@ -55,6 +69,7 @@ namespace Demo.Destruction
 
             box = gameObject.AddComponent<BoxCollider>();
             s_byCollider[box] = this;
+            if (!s_all.Contains(this)) s_all.Add(this);
 
             SetState(State.Intact);
         }
@@ -62,6 +77,7 @@ namespace Demo.Destruction
         void OnDestroy()
         {
             if (box != null) s_byCollider.Remove(box);
+            s_all.Remove(this);
         }
 
         /// <summary>

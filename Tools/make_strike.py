@@ -44,17 +44,20 @@ DEFAULT_SRC = os.path.join(os.path.expanduser('~'), 'Downloads')
 #   Whoosh  = 휘두름. 주먹이 공기를 가르는 소리 (소닉붐 자리)
 #   Barrage = 연타 뭉치. 한 조각이 0.7~2.1초라 한 대씩이 아니라 몰아칠 때 쓴다
 GROUPS = {
-    'Strike': ['firecracker_bang (1).wav',
+    # <b>묶음 이름 = 사운드뱅크의 Sfx 이름</b> [고침 2026-10-15].
+    # Demo/16(파일 이름으로 자동 연결)이 SFX_<Sfx이름>_NN 규칙을 쓴다. 이름이 어긋나 있으면
+    # 그 메뉴를 한 번 누르는 순간 연결이 통째로 뒤집힌다 — 실제로 그 위험을 안고 있었다.
+    'Boom': ['firecracker_bang (1).wav',
                'firecracker_bang (2).wav',
                'firecracker_bang (3).wav',
                'cannon_fire (1).wav',
                'cannon_fire (2).wav',
                'cannon_fire (3).wav',
                'fighting_sound (1).wav'],
-    'Impact': ['Heavy body impact_1.wav',
+    'Strike': ['Heavy body impact_1.wav',
                'Heavy body impact_2.wav',
                'Heavy body impact_3.wav'],
-    'Whoosh': ['Fast movement whoosh_1.wav',
+    'Punch': ['Fast movement whoosh_1.wav',
                'Fast movement whoosh_2.wav',
                'Fast movement whoosh_3.wav'],
     'Barrage': ['Rapid punch barrage_1.wav',
@@ -63,7 +66,7 @@ GROUPS = {
 }
 
 # 묶음마다 고역을 얼마나 올릴지(dB). 음을 옮기는 것이 아니라 대역 세기다.
-TREBLE = {'Strike': 4.0, 'Impact': 4.0, 'Whoosh': 0.0, 'Barrage': 2.0}
+TREBLE = {'Boom': 4.0, 'Strike': 4.0, 'Punch': 0.0, 'Barrage': 2.0}
 
 SILENCE_DB = -45.0      # 이 아래는 무음으로 본다 (파일 피크 기준)
 JOIN = 0.08             # 이보다 짧게 끊기는 틈은 같은 한 타로 본다(초)

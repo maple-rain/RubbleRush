@@ -250,6 +250,9 @@ namespace Demo.Collection
 
             Drift(cfg);
 
+            // 건물 삼킴 — 6단계 카드를 골랐을 때만 돈다. BuildingSwallow.cs 참조.
+            BuildingSwallow.Tick(this, cfg, (d, units) => OnBuildingSwallowed(d, units, cfg, loop));
+
             Vector2 center = new Vector2(transform.position.x, transform.position.z);
             float rSqr = Radius * Radius;
 
@@ -312,6 +315,24 @@ namespace Demo.Collection
             SwallowedUnits += units;
             loop.AddCollected(units);
             AddXpScaled(units * cfg.xpPerDebrisUnit);
+        }
+
+        /// <summary>
+        /// 건물 한 채를 삼켰다 [지시 2026-10-15]. 넘어가는 연출이 끝난 뒤 불린다.
+        ///
+        /// <b>부숴서 나왔을 잔해와 같은 값을 준다</b> — 통째로 삼키는 쪽이 이득이면
+        /// 부수는 행동이 의미를 잃고, 손해면 카드를 고를 이유가 없다.
+        /// </summary>
+        void OnBuildingSwallowed(Destruction.Destructible d, int units,
+                                 GameConfig cfg, GameLoop loop)
+        {
+            SwallowedUnits += units;
+            loop.AddCollected(units);
+            AddXpScaled(units * cfg.xpPerDebrisUnit);
+
+            // 건물은 잔해 하나보다 훨씬 큰 사건이다. 제일 큰 잔해와 같은 크기로 울린다.
+            Utils.GameAudio.Play(Data.Sfx.Broken,
+                                 d != null ? d.transform.position : transform.position);
         }
 
         void OnFallFinished(Debris d)
