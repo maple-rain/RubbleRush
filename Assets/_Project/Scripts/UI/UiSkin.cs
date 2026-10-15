@@ -144,11 +144,40 @@ namespace Demo.UI
             Color keep = s.normal.textColor;
             float off = Mathf.Max(2f, s.fontSize * 0.06f);
 
-            s.normal.textColor = new Color(0f, 0f, 0f, 0.6f);
+            Tint(s, new Color(0f, 0f, 0f, 0.6f));
             GUI.Label(new Rect(r.x + off, r.y + off, r.width, r.height), text, s);
 
-            s.normal.textColor = keep;
+            Tint(s, keep);
             GUI.Label(r, text, s);
+        }
+
+        /// <summary>
+        /// 글자색을 <b>모든 상태에</b> 쓴다 [고침 2026-10-15].
+        ///
+        /// IMGUI는 마우스가 올라간 칸을 <c>normal</c>이 아니라 <c>hover</c>로 그린다.
+        /// 그래서 <c>normal.textColor</c>만 바꾸면 <b>마우스를 올리는 순간 그 지정이
+        /// 통째로 무시된다.</b>
+        ///
+        /// <see cref="Shadowed"/>에서는 그것이 눈에 띄게 드러났다 — 이 함수는 글자를
+        /// 두 번 그린다(어두운 그림자 한 번, 본 글자 한 번). 마우스가 올라가면 그림자
+        /// 패스까지 본 색으로 그려져서, <b>같은 글자가 몇 픽셀 어긋나 두 벌</b> 겹친다.
+        /// 기획자: "숫자와 글자에 마우스를 가져다 둘 시 두껍게 표시되는 현상."
+        ///
+        /// 상태마다 색을 따로 둘 이유가 이 UI에는 없다. 누르는 것은
+        /// <see cref="Button"/>이 자기 색을 직접 칠하고, 나머지는 전부 그냥 글자다.
+        /// 그래서 여기서 여덟 상태를 한꺼번에 맞춰 둔다 — 호출부 수십 곳이
+        /// <c>normal</c>만 건드려도 틀리지 않는다.
+        /// </summary>
+        public static void Tint(GUIStyle s, Color c)
+        {
+            s.normal.textColor = c;
+            s.hover.textColor = c;
+            s.active.textColor = c;
+            s.focused.textColor = c;
+            s.onNormal.textColor = c;
+            s.onHover.textColor = c;
+            s.onActive.textColor = c;
+            s.onFocused.textColor = c;
         }
 
         /// <summary>진행 막대. 빈 부분 · 찬 부분 · 테두리.</summary>
@@ -198,11 +227,11 @@ namespace Demo.UI
 
                 Color keepColor = s.normal.textColor;
                 TextAnchor keepAlign = s.alignment;
-                s.normal.textColor = over ? new Color(0.1f, 0.08f, 0.04f) : Ink;
+                Tint(s, over ? new Color(0.1f, 0.08f, 0.04f) : Ink);
                 s.alignment = TextAnchor.MiddleCenter;
                 GUI.Label(r, text, s);
                 s.alignment = keepAlign;
-                s.normal.textColor = keepColor;
+                Tint(s, keepColor);
             }
 
             return GUI.Button(r, GUIContent.none, GUIStyle.none);

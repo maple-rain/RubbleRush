@@ -194,11 +194,14 @@ namespace Demo.Collection
                 // 구멍이 당기는 중이면 놓아준다. 두 힘이 맞서면 잔해가 그 사이에서 떤다.
                 if (d.IsBeingSucked) { d.TowPrev = d.transform.position; continue; }
 
+                Vector3 from = d.transform.position;
                 Vector3 at = pocket.PositionOf(i);
-                at.y = d.transform.position.y;
+                at.y = from.y;
 
-                // 건물·토대에 걸렸는가 [14번]. 여기서 자리를 고치면 다음 프레임의 속도도 같이 죽는다
-                if (snag.Check(ref at, d.SizeRadius)) { snagged.Add(d); d.TowPrev = at; }
+                // 건물·토대에 걸렸는가 [14번]. 여기서 자리를 고치면 다음 프레임의 속도도 같이 죽는다.
+                // <b>막히면 면을 따라 미끄러진다</b> [고침 2026-10-15] — 곧장 밀어내기만 하면
+                // 잔해가 벽에 박힌 채 떨다가 나중에 튕겨나온다. CheckSliding 주석 참조.
+                if (snag.CheckSliding(from, ref at, d.SizeRadius)) { snagged.Add(d); d.TowPrev = at; }
                 else d.TowPrev = pocket.PrevOf(i);
 
                 d.transform.position = at;
@@ -239,16 +242,15 @@ namespace Demo.Collection
                 // 바깥쪽(i가 클수록)이 더 느리다. sqrt로 재면 0~1로 고르게 퍼진다.
                 float outer = Mathf.Sqrt(i + 0.5f) * inv;
                 float rate = followLerp * (1f - outerLag * outer);
-                d.transform.position = Vector3.Lerp(d.transform.position, slot,
-                                                    1f - Mathf.Exp(-rate * dt));
 
-                // 건물·토대에 걸렸는가 [14번]. 걸리면 자리를 고쳐 주고 목록에 담는다
-                Vector3 at = d.transform.position;
-                if (snag.Check(ref at, d.SizeRadius))
-                {
-                    d.transform.position = at;
-                    snagged.Add(d);
-                }
+                // <b>옮기기 전 자리를 기억한다</b> — 미끄러짐을 계산하려면 '어디서
+                // 어디로 가려 했는가'가 둘 다 필요하다.
+                Vector3 from = d.transform.position;
+                Vector3 at = Vector3.Lerp(from, slot, 1f - Mathf.Exp(-rate * dt));
+
+                // 건물·토대에 걸렸는가 [14번]. 막히면 면을 따라 미끄러진다 [고침 2026-10-15].
+                if (snag.CheckSliding(from, ref at, d.SizeRadius)) snagged.Add(d);
+                d.transform.position = at;
 
                 // 제곱으로 비교한다 — 잔해 500개에 Sqrt를 500번 부를 이유가 없다.
                 // 가장 큰 조각도 여기서 같이 본다. LargestRadius를 부르면 500개를 또 훑는다.

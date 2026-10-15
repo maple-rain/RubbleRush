@@ -101,6 +101,14 @@ namespace Demo.Utils
                 + " · 목적지까지 "
                 + Vector3.Distance(hole.transform.position, hole.DriftTarget).ToString("0.0") + "m");
 
+            // 구멍이 플레이어에게서 얼마나 벌어졌는가. "잔해를 안 먹는다"가
+            // 사실은 "구멍이 저쪽에 있다"인 경우를 가른다.
+            var pc = Object.FindFirstObjectByType<Demo.Player.PlayerController>();
+            if (pc != null)
+                sb.AppendLine("     플레이어까지 "
+                    + Vector3.Distance(hole.transform.position, pc.transform.position).ToString("0.0")
+                    + "m  (흔인 끝 " + reach.ToString("0.0") + "m)");
+
             int shown = 0;
             foreach (Collection.Debris d in Collection.Debris.Active)
             {

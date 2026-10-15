@@ -69,7 +69,7 @@ namespace Demo.UI
 
                 // <b>닿은 등급은 밝게, 아직인 등급은 흐리게.</b> 숫자를 읽지 않아도
                 // 어디까지 왔는지가 보인다 — 그게 이 막대를 두는 이유다.
-                style.normal.textColor = score >= g.minScore ? Accent : InkDim;
+                Tint(style, score >= g.minScore ? Accent : InkDim);
 
                 float lw = labelRow.height * 2.2f;
                 var cell = new Rect(x - lw * 0.5f, labelRow.y, lw, labelRow.height);
@@ -82,7 +82,7 @@ namespace Demo.UI
             }
 
             style.alignment = keepAnchor;
-            style.normal.textColor = keepColor;
+            Tint(style, keepColor);
         }
     }
 }

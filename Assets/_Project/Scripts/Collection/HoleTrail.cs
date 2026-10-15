@@ -70,15 +70,23 @@ namespace Demo.Collection
             float rr = Mathf.Max(0.05f, holeRadius);
             rr *= rr;
 
-            // 앞에서부터 — 구멍이 이미 삼킨 자취다.
-            int drop = 0;
-            while (drop < points.Count)
+            // <b>구멍이 덮은 점 중 가장 늦은 것까지 통째로 버린다</b> [고침 2026-10-15].
+            //
+            // 전에는 앞에서부터 <b>연속으로</b> 든 점만 버렸다. 그래서 플레이어가 나갔다가
+            // 거의 같은 길로 되돌아오면 돌아온 쪽 점이 안 버려지고, 구멍이 <b>그 바퀴를
+            // 통째로 돌아야</b> 했다. 그동안 구멍은 엉뚱한 데서 옛 길을 걷고 있고
+            // 플레이어 발밑의 잔해는 안 먹혔다 — 기획자가 "끝에 가로막혀 잔해를 먹지
+            // 못하는 모습"으로 찍어 준 그림이다.
+            //
+            // 목록 전체를 보고 <b>마지막으로 덮인 점</b>을 찾아 거기까지 자르면 고리가
+            // 실제로 끊어진다. 점이 2천 개라도 프레임당 2천 번 비교라 값이 나가지 않는다.
+            int last = -1;
+            for (int i = 0; i < points.Count; i++)
             {
-                float dx = points[drop].x - holeAt.x, dz = points[drop].z - holeAt.z;
-                if (dx * dx + dz * dz > rr) break;
-                drop++;
+                float dx = points[i].x - holeAt.x, dz = points[i].z - holeAt.z;
+                if (dx * dx + dz * dz <= rr) last = i;
             }
-            if (drop > 0) points.RemoveRange(0, drop);
+            if (last >= 0) points.RemoveRange(0, last + 1);
 
             if (points.Count == 0) { to = holeAt; return false; }
 

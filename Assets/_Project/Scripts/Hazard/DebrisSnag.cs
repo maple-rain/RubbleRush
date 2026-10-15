@@ -167,6 +167,51 @@ namespace Demo.Hazard
         }
 
         /// <summary>
+        /// <see cref="Check"/>와 같되, 막혔으면 <b>면을 따라 미끄러지게</b> 한다
+        /// [고침 2026-10-15].
+        ///
+        /// <b>왜 필요했나.</b> Check 혼자서는 잔해를 면 법선으로 <b>곧장</b> 밀어낼 뿐이라,
+        /// 장애물을 돌아갈 방법이 없었다. 매 프레임 견인이 슬롯 쪽으로 당기고(슬롯은
+        /// 건물 안쪽일 수 있다) 여기서 도로 밀어내니 잔해가 <b>벽면에 핀으로 박힌 채 떨었고</b>,
+        /// 그물과 케이블이 같이 꿈틀거렸다. 그사이 슬롯은 계속 멀어지다가 건물을 벗어나는
+        /// 순간 쌓인 거리를 한 번에 당겨서 잔해가 <b>튕겨나오듯</b> 왔다.
+        /// 기획자: "건물에 막혀 끌려오지 않아 케이블도 꿈틀거리고 잔해가 나중에
+        /// 튕겨져나오듯 오거나 함."
+        ///
+        /// <b>고치는 법.</b> 가려던 움직임에서 <b>면을 파고드는 성분만</b> 빼고 나머지를
+        /// 남긴다. 남는 것이 면에 평행한 성분이라, 잔해가 벽을 따라 미끄러져 모서리를
+        /// 돌아 나간다. 게임에서 흔히 쓰는 collide-and-slide다.
+        ///
+        /// <b>세는 것은 한 번뿐이다.</b> 미끄러진 자리가 또 막히면(모서리) 한 번 더
+        /// 밀어내되 <see cref="SnaggedNow"/>는 올리지 않는다 — 한 번 걸린 것을 두 번 세면
+        /// 플레이어가 짐을 두 배로 잃는다.
+        /// </summary>
+        /// <param name="from">이번 프레임이 시작된 자리</param>
+        /// <param name="want">가려던 자리. 막혔으면 미끄러진 자리로 바뀐다</param>
+        /// <param name="radius">잔해 반경</param>
+        /// <returns>걸렸는가. <see cref="Check"/>와 같은 뜻이다</returns>
+        public bool CheckSliding(Vector3 from, ref Vector3 want, float radius)
+        {
+            Vector3 target = want;
+            if (!Check(ref want, radius)) return false;
+
+            // Check가 밀어낸 방향이 곧 면의 법선이다.
+            Vector3 push = want - target;
+            float len = push.magnitude;
+            if (len < 1e-5f) return true;
+            Vector3 n = push / len;
+
+            Vector3 move = target - from;
+            Vector3 slide = move - n * Vector3.Dot(move, n);
+
+            Vector3 at = from + slide + push;
+            if (ObstacleField.Overlap(at, radius * radiusScale, out Vector3 again)) at += again;
+
+            want = at;
+            return true;
+        }
+
+        /// <summary>
         /// 프레임 끝. 걸려 있던 시간을 누적하고 사건을 센다.
         /// </summary>
         /// <param name="dt">프레임 시간</param>
