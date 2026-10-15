@@ -57,6 +57,13 @@ TAIL_FADE = 0.008       # 끝을 0으로 내리는 길이(초)
 # 가공이 아니다 — 배율 하나를 곱할 뿐이라 소리의 성질은 그대로다.
 MATCH_LEVEL = True
 
+# <b>고역을 올린다</b> [지시 2026-10-15: "조금 더 귀에 팍 하고 박혔으면, 하이피치 조금만 올려"].
+#
+# 음높이를 옮기는 것이 아니다 — <b>높은 쪽 대역만 키운다.</b> 음은 그대로고
+# 날카로움만 올라간다. 0이면 원본 그대로다.
+TREBLE_DB = 4.0
+TREBLE_FROM = 2000.0        # 이 위를 올린다(Hz)
+
 
 def load(path):
     """모노 float로 읽는다. 스테레오면 평균 내고, 48kHz가 아니면 맞춘다."""
@@ -117,6 +124,25 @@ def cut(x, start, end):
     return y
 
 
+def shelf(x, from_hz, gain_db):
+    """
+    <b>높은 쪽 대역만 키우거나 줄인다</b>(하이셸프).
+
+    음높이를 옮기는 것이 아니다 — 재생 속도도 길이도 그대로이고, 대역별 세기만 바뀐다.
+    <paramref name="from_hz"/> 아래는 손대지 않고 그 위로 부드럽게 <paramref name="gain_db"/>까지 간다.
+    """
+    if abs(gain_db) < 0.01:
+        return x
+    spec = np.fft.rfft(x)
+    f = np.fft.rfftfreq(x.size, 1.0 / SR)
+    # from_hz에서 1배, 그 두 배 지점에서 목표치. 급하게 꺾지 않는다
+    t = np.clip(np.log2(np.maximum(f, 1.0) / from_hz), 0.0, 1.0)
+    spec *= 10 ** (gain_db * t / 20.0)
+    y = np.fft.irfft(spec, n=x.size)
+    peak = float(np.max(np.abs(y)))
+    return y * (0.999 / peak) if peak > 0.999 else y
+
+
 def heard(x):
     """
     <b>귀가 듣는 크기.</b> 300Hz~6kHz 대역의 세기로 잰다.
@@ -173,7 +199,7 @@ def main():
         print('  %-24s %5.2f초 -> 온전한 타격 %d개' % (name[:-4], x.size / float(SR), len(found)))
         for k, (s, e) in enumerate(found):
             piece = cut(x, s, e)
-            pieces.append(piece)
+            pieces.append(shelf(piece, TREBLE_FROM, TREBLE_DB))
             labels.append('%s%s' % (name[:-4], '' if len(found) == 1 else ' #%d' % (k + 1)))
             print('        %6.0f~%6.0fms  길이 %5.0fms' % (s * 1000.0 / SR, e * 1000.0 / SR,
                                                           piece.size * 1000.0 / SR))
@@ -200,8 +226,8 @@ def main():
     print()
     print('%d개. 길이를 정하지 않았다 — 소리가 끝나는 곳이 끝이다 (제일 긴 것 %.2f초).'
           % (len(pieces), longest))
-    print('음원에 한 일: 앞뒤 무음 떼기 · 끝 8ms 내리기 · 변형끼리 크기 맞추기.')
-    print('섞지도, 대역을 깎지도, 피치를 옮기지도 않았다.')
+    print('음원에 한 일: 앞뒤 무음 떼기 · 끝 8ms 내리기 · 크기 맞추기 · 고역 %+.1fdB.' % TREBLE_DB)
+    print('섞지 않았고, 음높이도 길이도 그대로다 — 고역만 %d Hz 위에서 올렸다.' % TREBLE_FROM)
     print('연타는 초당 다섯 번이라 %.0f개까지 겹친다 — SfxPool 음성 수가 그만큼 있어야 한다.'
           % (longest / 0.2 + 1))
     print()
