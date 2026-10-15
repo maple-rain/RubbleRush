@@ -104,6 +104,7 @@ namespace Demo.Core
             zone = data;
             Collected = 0;
             StructuresBroken = 0;
+            SwallowedStructures = 0;
             Upgrades.Reset();           // 지난 판의 카드를 들고 시작하지 않게
             TimeRemaining = data.timeLimit;
             Outcome = Result.Playing;
@@ -119,9 +120,44 @@ namespace Demo.Core
         {
             if (!IsRunning || units <= 0) return;
 
+            // <b>할당량으로 끝나지 않는다</b> [지시 2026-10-15].
+            //
+            // 전에는 여기서 `Collected >= Quota`면 바로 끝냈다. 그래서 구역에 504단위가
+            // 깔려 있는데 할당량 60(12%)만 치우면 판이 닫혔고, 초과 수집 배율은 그 프레임에
+            // 들어온 몇 단위에만 붙어 사실상 죽은 항목이었다.
+            // 기획자: "잔해 갯수를 없애고 점수제로 가는게 맞다고 판단됨."
+            //
+            // 이제 끝내는 것은 시간뿐이다 (<see cref="Update"/>). 치운 만큼이 곧 점수다.
             Collected += units;
-            if (Collected >= Quota) End(Result.Cleared);
         }
+
+        /// <summary>
+        /// 건물 하나를 <b>부수지 않고 통째로</b> 삼켰다 [지시 2026-10-15].
+        ///
+        /// 잔해 단위는 <see cref="AddCollected"/>가 따로 받는다. 여기는 <b>사건의 수</b>만
+        /// 센다 — 기획자가 점수 가산을 거기에 걸기로 했기 때문이다. 6단계 구멍의
+        /// "통째로 밀어넣는다"가 점수로도 보상되는 자리다.
+        /// </summary>
+        public void AddSwallowedStructure()
+        {
+            if (!IsRunning) return;
+            SwallowedStructures++;
+        }
+
+        /// <summary>이번 판에 통째로 삼킨 건물 수. 부순 건물(StructuresBroken)과 다르다.</summary>
+        public int SwallowedStructures { get; private set; }
+
+        /// <summary>
+        /// 지금까지의 점수. HUD가 매 프레임 읽는다 [지시 2026-10-15].
+        ///
+        /// <b>쌓아 두지 않고 매번 센다.</b> 항목이 넷(잔해·부순 건물·삼킨 건물·구멍 단계)뿐이고
+        /// 전부 이미 세고 있는 수라, 곱셈 네 번이면 끝난다. 따로 쌓아 두면
+        /// <b>더하는 자리를 빠뜨렸을 때 결과 화면의 점수와 어긋나는데</b>, 그 어긋남은
+        /// 판이 끝나야 보인다. 같은 식을 한 군데서만 쓰면 어긋날 수가 없다.
+        /// </summary>
+        public int CurrentScore => Score.Of(GameConfigRef.Current, Collected,
+                                            StructuresBroken, SwallowedStructures,
+                                            ActiveHole != null ? ActiveHole.Level : 0);
 
         /// <summary>붕괴에 깔리거나 폭발에 맞았을 때. 피해 = 시간 손실이므로 정지가 곧 손해다.</summary>
         public void ApplyStun(float seconds)
@@ -145,13 +181,13 @@ namespace Demo.Core
         {
             IsRunning = false;
             Outcome = result;
-            Debug.Log($"[GameLoop] 구역 종료 — {result} · 수집 {Collected}/{Quota} · " +
-                      $"남은 시간 {TimeRemaining:0.0}s · 부순 건물 {StructuresBroken}채");
+            Debug.Log($"[GameLoop] 구역 종료 — {result} · 수집 {Collected}단위 · " +
+                      $"부순 건물 {StructuresBroken}채 · 통째로 삼킨 건물 {SwallowedStructures}채");
 
             // 결과 화면은 구역이 끝날 때 딱 한 번 찾는다 — Update가 아니라 여기라서 괜찮다.
             if (resultScreen == null) resultScreen = FindFirstObjectByType<UI.ResultScreen>();
             if (resultScreen != null)
-                resultScreen.Show(result, Collected, Quota, TimeRemaining, StructuresBroken, ActiveHole);
+                resultScreen.Show(result, Collected, StructuresBroken, SwallowedStructures, ActiveHole);
             else
                 Debug.LogWarning("[GameLoop] 씬에 ResultScreen이 없다 — 구역이 끝나도 " +
                                  "플레이어에게 아무것도 안 보인다.", this);

@@ -81,11 +81,12 @@ namespace Demo.UI
 
             float timeH = line * 1.2f;
             float pipsH = line * 0.42f;
+            float gradeLabelH = line * 0.78f;   // 등급 글자가 앉는 띄. 막대 바로 위다
             int levels = Levels();
             bool showPips = hole != null && levels > 0;
 
             // 판을 먼저 깔아 둔다. 지면이 밝은 자리에서는 글자 그림자만으로 모자란다.
-            float blockH = timeH + gap + line + gap * 0.5f + barH
+            float blockH = timeH + gap + line + gap * 0.5f + gradeLabelH + barH
                          + (showPips ? gap + pipsH : 0f);
             UiSkin.Plate(new Rect(pad, pad, barW, blockH), pad * 0.4f);
 
@@ -99,14 +100,19 @@ namespace Demo.UI
             UiSkin.Shadowed(new Rect(pad, y, barW, timeH), t, big);
             y += timeH + gap;
 
-            // ── 할당량. 이 게임의 '퀘스트 진행도'다 ─────────────────────────────
+            // ── 점수와 등급. 할당량 막대를 대신한다 [지시 2026-10-15] ──────────
+            //
+            // 할당량 막대는 60단위를 채우면 끝이라 그 뒤로 아무것도 안 알려 줬다.
+            // 점수는 판이 끝날 때까지 계속 움직이고, 눈금이 "다음 글자까지 얼마"를 말한다.
             small.normal.textColor = UiSkin.Ink;
             UiSkin.Shadowed(new Rect(pad, y, barW, line),
-                            "할당량  " + loop.Collected + " / " + loop.Quota, small);
+                            "점수  " + loop.CurrentScore.ToString("N0"), small);
             y += line + gap * 0.5f;
 
-            UiSkin.Bar(new Rect(pad, y, barW, barH), loop.Progress01, UiSkin.Accent);
-            y += barH;
+            UiSkin.GradeBar(new Rect(pad, y + gradeLabelH, barW, barH),
+                            new Rect(pad, y, barW, gradeLabelH),
+                            loop.CurrentScore, Grades(), small);
+            y += gradeLabelH + barH;
 
             // ── 구멍 단계. 숫자보다 칸이 곁눈으로 읽힌다 ───────────────────────
             if (showPips)
@@ -138,6 +144,17 @@ namespace Demo.UI
         {
             var cfg = GameConfigRef.Current;
             return cfg != null && cfg.holeLevels != null ? cfg.holeLevels.Length : 0;
+        }
+
+        /// <summary>
+        /// 등급표. 비어 있으면 null이고, 그때 막대는 눈금 없이 빈 채로 선다 —
+        /// <see cref="UiSkin.GradeBar"/>가 그렇게 그린다. 기획자가 표를 채우기 전까지는
+        /// 거짓 눈금을 세우지 않는다.
+        /// </summary>
+        static Data.GameConfig.Grade[] Grades()
+        {
+            var cfg = GameConfigRef.Current;
+            return cfg != null ? cfg.grades : null;
         }
 
         /// <summary>글꼴·색·그리기는 전부 <see cref="UiSkin"/>이 가진다.</summary>

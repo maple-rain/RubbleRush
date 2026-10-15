@@ -104,23 +104,31 @@ namespace Demo.Data
         // 이 값들의 기록처다. 0으로 두면 그 항목은 점수에 안 들어간다.
 
         [Header("점수")]
-        [Tooltip("구멍에 넣은 잔해 1단위당. 할당량까지는 이 값 그대로")]
+        [Tooltip("구멍에 넣은 잔해 1단위당")]
         public float pointsPerDebrisUnit;
-
-        [Tooltip("할당량을 넘긴 잔해에 곱하는 배율. 1이면 넘겨도 같은 점수")]
-        public float overQuotaMultiplier;
-
-        [Tooltip("할당량을 채웠을 때 한 번 주는 보너스")]
-        public float quotaBonus;
-
-        [Tooltip("제한 시간이 남은 채로 끝냈을 때 1초당")]
-        public float pointsPerSecondLeft;
 
         [Tooltip("완전히 부순 건물 한 채당. 안 날라도 부순 것은 친다")]
         public float pointsPerStructure;
 
+        [Tooltip("부수지 않고 통째로 삼킨 건물 한 채당 [지시 2026-10-15].\n" +
+                 "잔해 단위는 따로 들어가므로 이것은 그 위에 얹는 가산이다.\n" +
+                 "0이면 꺼진 것과 같다 — 값은 기획자가 정한다")]
+        public float pointsPerSwallowedStructure;
+
         [Tooltip("끝났을 때 구멍 단계 1당")]
         public float holeLevelBonus;
+
+        // <b>아래 셋은 더 이상 점수에 들어가지 않는다</b> [지시 2026-10-15: 점수제 전환].
+        //
+        // 할당량이 사라지면서 세 항목이 같이 뜻을 잃었다 — 할당량 안팎을 나눌 수 없고,
+        // 달성이라는 사건이 없고, 시간을 끝까지 쓰고 끝나므로 남은 시간은 언제나 0이다.
+        // 필드를 지우지 않고 남겨 둔 이유는 <b>에셋에 이미 박힌 값을 지우면
+        // 되돌릴 때 수치가 사라지기 때문</b>이다 (씬·에셋 직렬화는 코드가 못 되돌린다).
+        // 점수제가 자리를 잡으면 그때 지운다.
+
+        [HideInInspector] public float overQuotaMultiplier;
+        [HideInInspector] public float quotaBonus;
+        [HideInInspector] public float pointsPerSecondLeft;
 
         [Header("등급")]
         [Tooltip("점수 → 등급. 높은 등급을 위에 둔다. 맨 아래 minScore는 0이어야 한다 —\n" +

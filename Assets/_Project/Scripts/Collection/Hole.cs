@@ -384,6 +384,7 @@ namespace Demo.Collection
         {
             SwallowedUnits += units;
             loop.AddCollected(units);
+            loop.AddSwallowedStructure();      // 점수 가산이 여기 걸린다 [지시 2026-10-15]
             AddXpScaled(units * cfg.xpPerDebrisUnit);
 
             // 건물은 잔해 하나보다 훨씬 큰 사건이다. 제일 큰 잔해와 같은 크기로 울린다.

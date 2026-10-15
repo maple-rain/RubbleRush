@@ -10,9 +10,16 @@ namespace Demo.Core
     /// 수치는 기획자 몫이고 <c>Tools/balance/score_rules.csv</c> · <c>grades.csv</c>가 기록처다.
     /// 항목을 0으로 두면 그 항목은 점수에 안 들어간다.
     ///
-    /// <b>왜 할당량 안팎을 나누는가.</b> 할당량은 통과 조건이고, 그 위는 "더 했다"다.
-    /// 둘을 같은 단가로 주면 할당량을 채운 뒤 그만두는 것과 끝까지 나르는 것이
-    /// 같은 기울기가 된다 — 넘긴 쪽에 배율을 따로 둔 이유다.
+    /// <b>할당량이 없다</b> [지시 2026-10-15]. 전에는 할당량 안팎을 나누고, 달성 보너스를
+    /// 주고, 남은 시간을 점수로 바꿨다. 그 구조에는 두 가지 문제가 있었다:
+    ///
+    /// 1. <b>할당량을 채우는 순간 판이 끝났다.</b> 구역에 504단위가 깔려 있는데 할당량은
+    ///    60(12%)이라, 초과 수집 배율은 마지막 한 묶음에만 붙어 사실상 죽은 항목이었다.
+    /// 2. <b>치워야 하는 잔해와 점수의 연결이 안 보였다</b> — 기획자의 말이다. 한 판의
+    ///    18%가 "남은 시간"에서 나왔는데, 그것은 치운 양과 아무 상관이 없다.
+    ///
+    /// 이제 <b>시간이 끝날 때까지 치운 만큼이 점수다.</b> 남은 시간 항목은 없앴다
+    /// (시간을 다 쓰고 끝나므로 언제나 0이다).
     ///
     /// <b>구멍은 '자란 단계'를 센다.</b> 시작이 1단계라 그대로 세면 아무것도 안 해도
     /// 한 칸을 먼저 받는다. 0부터 세서 <b>키운 만큼만</b> 준다.
@@ -23,21 +30,19 @@ namespace Demo.Core
     public static class Score
     {
         /// <summary>구역 점수. 음수는 나오지 않는다.</summary>
-        public static int Of(GameConfig cfg, int collected, int quota,
-                             float timeLeft, int structuresBroken, int holeLevel)
+        /// <param name="collected">구멍에 넣은 잔해 단위</param>
+        /// <param name="structuresBroken">부순 건물 수</param>
+        /// <param name="swallowedStructures">부수지 않고 통째로 삼킨 건물 수 [지시 2026-10-15]</param>
+        /// <param name="holeLevel">구멍을 키운 칸 수 (0부터)</param>
+        public static int Of(GameConfig cfg, int collected,
+                             int structuresBroken, int swallowedStructures, int holeLevel)
         {
             if (cfg == null) return 0;
 
-            int inQuota = Mathf.Min(collected, Mathf.Max(0, quota));
-            int over = Mathf.Max(0, collected - Mathf.Max(0, quota));
-
-            float total = inQuota * cfg.pointsPerDebrisUnit
-                        + over * cfg.pointsPerDebrisUnit * Mathf.Max(0f, cfg.overQuotaMultiplier)
-                        + Mathf.Max(0f, timeLeft) * cfg.pointsPerSecondLeft
+            float total = Mathf.Max(0, collected) * cfg.pointsPerDebrisUnit
                         + Mathf.Max(0, structuresBroken) * cfg.pointsPerStructure
+                        + Mathf.Max(0, swallowedStructures) * cfg.pointsPerSwallowedStructure
                         + Mathf.Max(0, holeLevel) * cfg.holeLevelBonus;
-
-            if (quota > 0 && collected >= quota) total += cfg.quotaBonus;
 
             return Mathf.Max(0, Mathf.RoundToInt(total));
         }

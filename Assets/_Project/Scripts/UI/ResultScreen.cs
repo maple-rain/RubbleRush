@@ -57,32 +57,39 @@ namespace Demo.UI
         public static bool Blocking { get; private set; }
 
         /// <summary>GameLoop가 구역을 끝내면서 부른다.</summary>
-        public void Show(GameLoop.Result result, int collected, int quota,
-                         float timeRemaining, int structuresBroken, Hole hole)
+        public void Show(GameLoop.Result result, int collected,
+                         int structuresBroken, int swallowedStructures, Hole hole)
         {
             if (shown) return;
             shown = true;
             Blocking = true;
 
-            cleared = result == GameLoop.Result.Cleared;
-            headline = cleared ? "철거 완료" : "시간 초과";
+            // <b>성패가 아니라 등급이다</b> [지시 2026-10-15: 점수제 전환].
+            //
+            // 할당량이 없어지면서 "달성/미달성"이라는 사건이 사라졌다. 판은 언제나
+            // 시간이 끝나서 끝나므로 모든 판이 '시간 초과'가 되는데, 그것을 실패로
+            // 읽히게 두면 어떤 판도 성공이 아니게 된다. 이제 결과는 <b>몇 점을 냈는가</b> 하나다.
+            cleared = true;
+            headline = "철거 완료";
 
             // ── 점수와 별. 화면의 주인공이다 [지시 2026-10-13] ────────────────
             GameConfig cfg = GameConfigRef.Current;
             int grown = hole != null ? hole.Level : 0;      // 키운 칸 수 (시작은 0)
-            score = Score.Of(cfg, collected, quota, timeRemaining, structuresBroken, grown);
+            score = Score.Of(cfg, collected, structuresBroken, swallowedStructures, grown);
             grade = Score.GradeOf(cfg, score);
             maxStars = Score.MaxStars(cfg);
 
-            // 실패하면 별은 0개다 [지시 2026-10-14]. 점수만으로는 가를 수 없다 —
-            // 건물만 많이 부수고 못 나르면 떨어져도 점수가 높게 나온다.
-            stars = cleared && grade != null ? Mathf.Clamp(grade.stars, 0, maxStars) : 0;
+            // 별은 이제 점수만으로 정해진다. 가를 조건이 등급표뿐이다.
+            stars = grade != null ? Mathf.Clamp(grade.stars, 0, maxStars) : 0;
 
             // ── 내역. 점수가 어디서 나왔는지 보이는 자리다 ─────────────────────
+            // 줄과 점수 항목을 <b>일대일로</b> 맞춘다 — 기획자: "치워야하는 잔해와
+            // 달성 점수간의 유기적 연결이 보이지 않음". 안 세는 것은 안 적는다.
             rows.Clear();
-            rows.Add(new Row { label = "수집", value = collected + " / " + quota });
-            rows.Add(new Row { label = "남은 시간", value = Clock(timeRemaining) });
+            rows.Add(new Row { label = "치운 잔해", value = collected + "단위" });
             rows.Add(new Row { label = "부순 건물", value = structuresBroken + "채" });
+            if (swallowedStructures > 0)
+                rows.Add(new Row { label = "통째로 삼킨 건물", value = swallowedStructures + "채" });
 
             if (hole != null)
                 rows.Add(new Row

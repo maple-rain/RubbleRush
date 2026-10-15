@@ -161,8 +161,11 @@ namespace Demo.Utils
             GUILayout.BeginArea(new Rect(12, 12, 460, 300), GUI.skin.box);
 
             if (loop != null)
-                GUILayout.Label($"할당량  <b>{loop.Collected} / {loop.Quota}</b>   " +
-                                $"남은 시간  <b>{loop.TimeRemaining:0.0}s</b>", style);
+                GUILayout.Label($"점수  <b>{loop.CurrentScore:N0}</b>   " +
+                                $"잔해 <b>{loop.Collected}</b>단위   " +
+                                $"부숬 <b>{loop.StructuresBroken}</b>채   " +
+                                $"삼킴 <b>{loop.SwallowedStructures}</b>채   " +
+                                $"남은 시간 <b>{loop.TimeRemaining:0.0}s</b>", style);
 
             if (hole != null)
             {
