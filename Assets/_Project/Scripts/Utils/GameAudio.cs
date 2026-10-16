@@ -102,9 +102,25 @@ namespace Demo.Utils
             if (a != null) a.PlayHere(id, at, volumeScale, pitchScale);
         }
 
+        /// <summary>
+        /// <b>이것 하나만 듣는다</b> [신설 2026-10-16]. None 이면 꺼진 것이다.
+        ///
+        /// 기획자: "일단은 VfxBurst 사운드를 제외하고 다 꺼봐줄 수 있나?"
+        /// 소리가 겹쳐 있으면 어느 것이 박자가 어긋났는지 가릴 수가 없다.
+        /// 하나만 남기면 그 소리의 타이밍만 들린다.
+        ///
+        /// <b>SoundBank 의 음량을 건드리지 않는다.</b> 0 으로 적어 끄면 기획자가
+        /// 맞춰 둔 값이 지워지고 되돌릴 때 기억에 의존하게 된다. 여기서 거르면
+        /// 원래 값이 그대로 남는다.
+        /// </summary>
+        /// <b>지금은 VfxBurst 로 켜 둔다</b> [지시 2026-10-16] — 그것만 듣고 박자를
+        /// 보기 위해서다. <b>F8 로 끌 수 있고</b>, 확인이 끝나면 None 으로 되돌릴 것.
+        public static Sfx Solo { get; set; } = Sfx.VfxBurst;
+
         void PlayHere(Sfx id, Vector3 at, float volumeScale, float pitchScale)
         {
             if (bank == null || pool == null || master <= 0f) return;
+            if (Solo != Sfx.None && id != Solo) return;
 
             SoundBank.Entry e = bank.Find(id);
             if (e == null || e.clips == null || e.clips.Length == 0) return;

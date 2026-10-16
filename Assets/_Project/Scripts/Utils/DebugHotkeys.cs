@@ -72,6 +72,17 @@ namespace Demo.Utils
             // 재현이 안 되는 증상이라, 그 순간에 눌러 이유를 남기게 한다.
             if (kb.f6Key.wasPressedThisFrame) ReportHole();
 
+            // F8 — 소리 하나만 듣기 [지시 2026-10-16].
+            // 겹쳐 있으면 어느 것이 박자가 어긋났는지 못 가린다.
+            if (kb.f8Key.wasPressedThisFrame)
+            {
+                GameAudio.Solo = GameAudio.Solo == Data.Sfx.None
+                               ? Data.Sfx.VfxBurst : Data.Sfx.None;
+                Debug.Log(GameAudio.Solo == Data.Sfx.None
+                        ? "[F8] 전부 켰다"
+                        : "[F8] " + GameAudio.Solo + " 만 듣는다 — 나머지는 조용하다");
+            }
+
             // F7 — 주먹 바람이 왜 안 보이는지 [2026-10-16].
             // "안 나오는 것"과 "나오는데 안 보이는 것"은 고치는 곳이 다르다.
             if (kb.f7Key.wasPressedThisFrame)
