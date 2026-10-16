@@ -115,31 +115,55 @@ namespace Demo.Utils
         /// </summary>
         /// <b>지금은 VfxBurst 로 켜 둔다</b> [지시 2026-10-16] — 그것만 듣고 박자를
         /// 보기 위해서다. <b>F8 로 끌 수 있고</b>, 확인이 끝나면 None 으로 되돌릴 것.
-        public static Sfx Solo
+        /// <summary>
+        /// <b>이것 하나만 듣는다</b> [신설 2026-10-16]. None 이면 꺼진 것이다.
+        /// F8 로 토글한다.
+        ///
+        /// SoundBank 의 음량은 안 건드린다 — 0 으로 적어 끄면 기획자가 맞춰 둔 값이
+        /// 지워지고 되돌릴 때 기억에 의존하게 된다. 거르기만 한다.
+        /// </summary>
+        public static Sfx Solo { get; set; } = Sfx.VfxBurst;
+
+        /// <summary>
+        /// 배경음·환경음을 <b>매 프레임 확인해서</b> 맞춘다 [고침 2026-10-16].
+        ///
+        /// 처음에는 Solo 의 setter 안에서 껐다. 두 가지가 틀렸다 —
+        /// 기본값을 <b>뒷받침 필드에 직접</b> 넣어서 setter 가 한 번도 안 불렸고,
+        /// 불렸더라도 정적 초기화 시점에는 MusicPlayer 가 아직 없다.
+        /// 그래서 "환경음 배경음 끄라니까"를 두 번 듣게 됐다.
+        ///
+        /// 상태를 들고 있지 않고 매번 맞추면 나중에 생긴 소리도 같이 잡힌다.
+        /// 값이 이미 맞으면 아무것도 안 하므로 비용은 사실상 0이다.
+        /// </summary>
+        void LateUpdate()
         {
-            get => s_solo;
-            set
+            bool soloing = Solo != Sfx.None;
+
+            MusicPlayer m = MusicPlayer.Current;
+            if (m != null)
             {
-                s_solo = value;
-                // <b>배경음과 환경음도 같이 끈다</b> [지시 2026-10-16].
-                // 하나만 들으려는 것인데 음악이 깔려 있으면 여운이 그 위에 묻힌다.
-                MusicPlayer m = MusicPlayer.Current;
-                if (m != null) m.Volume = value == Sfx.None ? s_musicWas : 0f;
-                foreach (AudioSource src in Object.FindObjectsByType<AudioSource>(
-                             FindObjectsSortMode.None))
-                    if (src.loop) src.mute = value != Sfx.None;   // 루프 = 환경음
+                if (soloing)
+                {
+                    if (m.Volume > 0f) s_musicWas = m.Volume;   // 끄기 전 크기를 기억
+                    if (m.Volume != 0f) m.Volume = 0f;
+                }
+                else if (m.Volume == 0f && s_musicWas > 0f) m.Volume = s_musicWas;
             }
+
+            // 루프로 도는 AudioSource = 환경음·견인음. 한 번에 다 잡는다.
+            // 매 프레임 Find 는 비싸므로 네 프레임에 한 번만 훑는다.
+            if ((Time.frameCount & 3) != 0) return;
+            foreach (AudioSource src in Object.FindObjectsByType<AudioSource>(
+                         FindObjectsSortMode.None))
+                if (src.loop && src.mute != soloing) src.mute = soloing;
         }
 
-        static Sfx s_solo = Sfx.VfxBurst;
-
-        /// <summary>솔로를 켜기 전의 배경음 크기. 끌 때 되돌린다.</summary>
         static float s_musicWas = 0.35f;
 
         void PlayHere(Sfx id, Vector3 at, float volumeScale, float pitchScale)
         {
             if (bank == null || pool == null || master <= 0f) return;
-            if (s_solo != Sfx.None && id != s_solo) return;
+            if (Solo != Sfx.None && id != Solo) return;
 
             SoundBank.Entry e = bank.Find(id);
             if (e == null || e.clips == null || e.clips.Length == 0) return;
