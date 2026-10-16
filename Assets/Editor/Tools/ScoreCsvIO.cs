@@ -124,7 +124,13 @@ namespace Demo.EditorTools
             {
                 SerializedProperty e = arr.GetArrayElementAtIndex(i);
                 e.FindPropertyRelative("stars").intValue = keep[i].stars;
-                e.FindPropertyRelative("minScore").floatValue = keep[i].min;
+                // <b>minScore 는 int 다</b> [고침 2026-10-16].
+                //
+                // floatValue 로 쓰고 있었다. SerializedProperty 는 타입이 다르면
+                // 예외가 아니라 <b>에러 로그만 찍고 그냥 안 쓴다</b> — 그래서 이 도구가
+                // "불러왔다"는 표를 멀쩡히 출력하면서 실제로는 문턱을 하나도 안 넣었다.
+                // 로그가 성공처럼 보여서 콘솔의 에러를 따로 안 봤으면 모르고 지나갔다.
+                e.FindPropertyRelative("minScore").intValue = Mathf.RoundToInt(keep[i].min);
                 e.FindPropertyRelative("label").stringValue = keep[i].label;
                 log.AppendLine(string.Format("    별 {0}  {1,8:0}점  {2}",
                                              keep[i].stars, keep[i].min, keep[i].label));
