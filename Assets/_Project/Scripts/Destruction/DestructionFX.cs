@@ -159,16 +159,10 @@ namespace Demo.Destruction
             }
             Utils.GameAudio.Play(Data.Sfx.Punch, transform.position);
 
-            // <b>연출에 따라붙는 소리</b> [지시 2026-10-16]. 소닉붐 7 : 캐논파이어 3.
-            //
-            // 기획자: "소닉붐과 같은 소리를 구현하자고 레퍼런스까지 줬는데 왜
-            // 사용이 안된거 같냐고." 맞는 지적이었다 — 내가 그것을 <b>완파 한 번</b>에만
-            // 넣어 둬서, 건물 하나를 다 부수는 동안 딱 한 번 울렸다. 거의 안 들린다.
-            //
-            // "펀치 사운드 + 맞는곳의 사운드 + VFX의 사운드" 셋 중 이것이 VFX 몫이고,
-            // VFX(주먹 바람)는 <b>주먹마다</b> 난다. 그러니 소리도 주먹마다 나야 한다.
-            // 0.17초로 짧게 잘라 뒀다 — 연타 간격 0.2초를 안 넘는다.
-            Utils.GameAudio.Play(Data.Sfx.VfxBurst, transform.position);
+            // 연출 소리(VfxBurst)는 여기서 안 울린다 — <b>주먹이 닿는 정점</b>에
+            // 맞춰 ImpactAfter 가 울린다 [고침 2026-10-16]. 아래 burstAt 참조.
+            burstAt = 1f;
+            burstPoint = transform.position;
         }
 
         /// <summary>
@@ -218,6 +212,10 @@ namespace Demo.Destruction
         [SerializeField, Range(0.2f, 1f), Tooltip("두 번째 타격의 음량 비율. 본 타격보다 작아야 " +
                  "'뒤따라온 것'으로 들린다")]
         float standVolumeShare = 0.75f;
+
+        /// <summary>정점에 울릴 연출 소리가 예약돼 있는가. 자리는 burstPoint 다.</summary>
+        float burstAt;
+        Vector3 burstPoint;
 
         float standLeft;
         float standVolume;
@@ -385,6 +383,19 @@ namespace Demo.Destruction
             Shake(magnitude, shakeSeconds);
             float rush = robot != null ? robot.Rush01 : 0f;
             if (rush <= rushSuppressAbove && stop != null) stop.Hold(hitStopScale);
+
+            // <b>연출 소리도 여기서 울린다</b> [고침 2026-10-16].
+            //
+            // 기획자: "해당 SFX 사운드와 주먹을 내지를 때의 사운드의 타이밍이
+            // 맞지 않기도 해." 맞는 지적이었다 — OnPunch 에서 휘두름 소리와
+            // <b>같은 순간에</b> 울리고 있었다. 휘두름은 주먹이 나가기 시작할 때고
+            // 연출은 <b>닿을 때</b>라, 둘이 겹치면 '쉭'과 '쾅'이 한 덩어리로 들린다.
+            //
+            // 흔들림이 이미 정점을 기다리고 있었다(StrikePeakCount). 같은 자리에
+            // 붙이면 소리와 화면과 주먹이 한 박자에 떨어진다. 실측된 정점은
+            // 방아쇠에서 130ms 뒤다.
+            if (burstAt > 0f) Utils.GameAudio.Play(Data.Sfx.VfxBurst, burstPoint);
+            burstAt = 0f;
         }
 
         /// <summary>

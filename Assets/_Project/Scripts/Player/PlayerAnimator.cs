@@ -304,7 +304,7 @@ namespace Demo.Player
         public void PunchWind(bool rightArm)
         {
             if (wind == null) return;
-            try { wind.Burst(rightArm); }
+            try { wind.Burst(rightArm, rush.Level01); }
             catch (System.Exception e)
             {
                 wind = null;        // 한 번 실패하면 매 타격마다 던지게 두지 않는다

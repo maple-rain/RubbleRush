@@ -52,6 +52,9 @@ namespace Demo.Utils
         /// <summary>주먹 너머로 더 뻗는 비율. 0이면 팔뚝 길이 그대로다.</summary>
         const float Overreach = 0.70f;
 
+        /// <summary>연타가 최대일 때 수명을 이 배로 줄인다 [제안·미승인].</summary>
+        const float RushLifeScale = 0.45f;
+
         // ── 상태 ─────────────────────────────────────────────────────────────
 
         struct Stroke
@@ -69,6 +72,7 @@ namespace Demo.Utils
         float scale = 1f;
 
         float emitLeft, nextShot;
+        float life = Life;      // 이번 주먹의 잔상 수명. 연타면 짧아진다
         float lastReach;        // 직전 프레임의 손~몸 거리. 되돌아오는 것을 잡는다
         bool emitRight;
 
@@ -181,9 +185,18 @@ namespace Demo.Utils
         }
 
         /// <summary>한 방 나갔다. 여기서부터 <see cref="Shots"/>장을 찍기 시작한다.</summary>
-        public void Burst(bool rightArm)
+        /// <param name="rush01">연타 정도 0~1 (<see cref="Demo.Player.PunchRush"/>).
+        /// 클수록 <b>잔상이 짧게 산다</b> [고침 2026-10-16].
+        ///
+        /// 기획자: "잔상이 연타일 때 남아있는 경우가 있음."
+        /// 수명 0.28초인데 연타는 0.2초 간격이라, 다음 주먹이 나갈 때 이전 잔상이
+        /// 아직 살아 있었다. "연타했다는 감각"을 노린 설계였지만 실제로 치면
+        /// 지저분하다. 속도가 올라가면 수명을 줄여 겹치지 않게 한다 —
+        /// <b>문턱을 긋지 않으므로</b> 단타와 연타 사이가 끊기지 않는다.</param>
+        public void Burst(bool rightArm, float rush01 = 0f)
         {
             emitRight = rightArm;
+            life = Mathf.Lerp(Life, Life * RushLifeScale, Mathf.Clamp01(rush01));
             emitLeft = Shots * ShotGap;
             nextShot = 0f;
 
@@ -210,7 +223,7 @@ namespace Demo.Utils
 
             Stroke k = strokes[idx];
             Place(k.T, a, b);
-            k.Left = Life;
+            k.Left = life;
 
             // <b>켜기 전에 색을 넣는다.</b> LateUpdate 를 기다리면 그 사이 한
             // 프레임이 머티리얼 기본색(순백)으로 그려진다.
@@ -354,7 +367,7 @@ namespace Demo.Utils
                 // 기하도 블렌딩도 자리도 맞았는데 내가 안 보이게 만들어 뒀다.
                 //
                 // 루트면 절반에서 0.60 이라 끝까지 읽힌다.
-                float a = Mathf.Sqrt(k.Left / Life);
+                float a = Mathf.Sqrt(k.Left / Mathf.Max(0.01f, life));
                 mpb.SetColor("_BaseColor", new Color(1f, 1f, 1f, a * Alpha));
                 k.R.SetPropertyBlock(mpb);
 
