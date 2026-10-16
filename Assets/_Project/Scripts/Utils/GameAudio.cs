@@ -124,7 +124,7 @@ namespace Demo.Utils
         /// </summary>
         public static Sfx Solo { get; set; } =
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Sfx.VfxBurst;      // 지금 박자를 듣고 있다. F8 로 끈다
+            Sfx.None;          // F8 로 켠다. <b>켜 둔 채로 두지 말 것</b> — 한 소리만 난다
 #else
             Sfx.None;          // <b>출시 빌드에는 절대 안 따라간다</b>
 #endif

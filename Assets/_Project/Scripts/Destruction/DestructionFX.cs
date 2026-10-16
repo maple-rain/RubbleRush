@@ -237,12 +237,12 @@ namespace Demo.Destruction
         [SerializeField, Range(0.2f, 1f),
          Tooltip("연타가 최대일 때의 타격음 크기 [제안·미승인 2026-10-16]. "
                  + "1이면 첫 타와 같고, 작을수록 첫 타가 도드라진다")]
-        float flurryVolume = 0.55f;
+        float flurryVolume = 0.90f;
 
         [SerializeField, Range(0f, 0.6f),
          Tooltip("이 아래면 '첫 타'로 보고 꼬리를 얹는다 [제안·미승인 2026-10-16]. "
                  + "PunchRush.Level01 기준 — 0이 단타, 1이 최대 연타다")]
-        float firstHitBelow = 0.25f;
+        float firstHitBelow = 0.35f;
 
         float standLeft;
         float standVolume;
