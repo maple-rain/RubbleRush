@@ -244,7 +244,9 @@ namespace Demo.Destruction
 
             if (fx != null)
             {
-                fx.OnBroken(targetPoint);
+                // 밑변의 긴 쪽을 넘긴다 — 큰 건물일수록 둔탁하게 울린다.
+                Vector3 cs = Target.Data != null ? Target.Data.colliderSize : Vector3.zero;
+                fx.OnBroken(targetPoint, Mathf.Max(cs.x, cs.z));
                 // 필드로 돌아가기 전에 걸려 있는 주먹을 거둔다 [고침 2026-10-16].
                 // 안 거두면 소비되지 않은 방아쇠가 필드에서 터져 허공을 친다.
                 fx.OnLeaveDemolition();

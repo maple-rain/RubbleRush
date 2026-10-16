@@ -88,13 +88,21 @@ namespace Demo.Utils
         /// </summary>
         /// <param name="at">소리가 날 자리. 평면(flat) 소리면 무시된다</param>
         /// <param name="volumeScale">그 순간의 세기. 약한 타격은 작게 울린다</param>
-        public static void Play(Sfx id, Vector3 at, float volumeScale = 1f)
+        /// <param name="pitchScale">그 한 발의 음높이 배율 [신설 2026-10-16].
+        /// 1보다 작으면 낮고 느려져 <b>둔탁해진다</b>. 큰 건물이 무너질 때처럼
+        /// "같은 소리인데 더 무겁다"를 만드는 데 쓴다.
+        ///
+        /// <b>흔드는 것이 아니다.</b> 부르는 쪽이 값을 정해 넘기므로 같은 상황이면
+        /// 늘 같은 소리가 난다 [지시 2026-10-16: "랜덤으로 나오는게 아니라
+        /// 조율이 되어서 나왔으면 해"].</param>
+        public static void Play(Sfx id, Vector3 at, float volumeScale = 1f,
+                                float pitchScale = 1f)
         {
             GameAudio a = s_current;
-            if (a != null) a.PlayHere(id, at, volumeScale);
+            if (a != null) a.PlayHere(id, at, volumeScale, pitchScale);
         }
 
-        void PlayHere(Sfx id, Vector3 at, float volumeScale)
+        void PlayHere(Sfx id, Vector3 at, float volumeScale, float pitchScale)
         {
             if (bank == null || pool == null || master <= 0f) return;
 
@@ -107,7 +115,11 @@ namespace Demo.Utils
             if (e.minGap > 0f && now - e.LastAt < e.minGap) { SuppressedCount++; return; }
             e.LastAt = now;
 
-            float pitch = 1f + Random.Range(-e.pitchJitter, e.pitchJitter);
+            // pitchJitter 는 전부 0 이다 [지시 2026-10-15]. 남겨 둔 것은 에셋에
+            // 값이 박혀 있어서지 쓰라는 뜻이 아니다. 음높이를 바꾸는 것은
+            // 부르는 쪽이 넘기는 pitchScale 뿐이다.
+            float pitch = (1f + Random.Range(-e.pitchJitter, e.pitchJitter))
+                        * Mathf.Clamp(pitchScale, 0.25f, 4f);
             // 타격 화면에서는 무조건 플레이어 기준 가운데에서 낸다 [지시 2026-10-14].
             // 1인칭으로 붙어 치는 화면이라 소리가 좌우로 치우치면 내가 치는 것 같지 않다.
             bool flat = e.flat || InDemolition();

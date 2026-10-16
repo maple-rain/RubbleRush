@@ -275,11 +275,38 @@ namespace Demo.Destruction
             Utils.GameAudio.Play(Data.Sfx.Finisher, point);
         }
 
-        /// <summary>대상이 완전히 부서진 순간.</summary>
-        public void OnBroken(Vector3 point)
+        /// <summary>
+        /// 대상이 완전히 부서진 순간.
+        /// </summary>
+        /// <param name="point">소리가 날 자리</param>
+        /// <param name="sizeMeters">무너진 건물의 밑변 크기(m). 0이면 크기를 안 본다.
+        /// <b>클수록 둔탁해진다</b> [지시 2026-10-16: "더 큰 건물을 부술수록
+        /// 둔탁해지게 설정이 가능한가?"] — 가능하고, 아래가 그 장치다.</param>
+        public void OnBroken(Vector3 point, float sizeMeters = 0f)
         {
             Impact(brokenShake, brokenShakeSeconds, brokenHitStop);
-            Utils.GameAudio.Play(Data.Sfx.Broken, point);
+
+            // <b>큰 건물일수록 음높이를 낮춘다.</b> 같은 음원이라도 낮으면 느리고
+            // 무겁게 들린다 — 큰 것이 무너질 때 기대하는 소리가 그쪽이다.
+            //
+            // <b>흔드는 것이 아니다.</b> 건물 크기가 정하므로 같은 건물은 늘 같은
+            // 소리가 난다. 세기(GameConfig.brokenSizePitch)는 <b>0으로 두었다</b> —
+            // 기획자가 값을 줄 때까지 아무 일도 안 일어난다.
+            float pitch = 1f;
+            Data.GameConfig cfg = Core.GameConfigRef.Current;
+            if (cfg != null && cfg.brokenSizePitch > 0f && sizeMeters > 0f)
+            {
+                // 기준은 3m. 그보다 크면 내려가고 작으면 올라간다.
+                float rel = Mathf.Log(Mathf.Max(0.5f, sizeMeters) / 3f, 2f);
+                pitch = Mathf.Clamp(1f - rel * cfg.brokenSizePitch, 0.5f, 1.5f);
+            }
+
+            Utils.GameAudio.Play(Data.Sfx.Broken, point, 1f, pitch);
+
+            // <b>연출에 따라붙는 소리</b> [지시 2026-10-16]. 타격·파괴와 따로 울린다 —
+            // "펀치 사운드 + 맞는곳의 사운드 + VFX의 사운드". 지금은 VFX가 아직
+            // 안 보이지만 소리 자리를 먼저 잡아 둔다.
+            Utils.GameAudio.Play(Data.Sfx.VfxBurst, point, 1f, pitch);
         }
 
         /// <summary>

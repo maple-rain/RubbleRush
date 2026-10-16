@@ -144,7 +144,17 @@ namespace Demo.Utils
             if (s_mat != null) return s_mat;
 
             const int N = 64;
-            s_disc = new Texture2D(N, N, TextureFormat.Alpha8, false) { name = "BlobDisc" };
+            // <b>Alpha8 을 쓰면 안 된다</b> [고침 2026-10-16].
+            //
+            // Alpha8 은 알파 한 채널만 저장한다. 그 텍스처를 셰이더에서 샘플링할 때
+            // RGB 가 무엇으로 읽히는지는 <b>플랫폼의 스위즐에 달려 있고 보장이 없다.</b>
+            // 여기서는 알파 데이터가 RGB 로 읽히고 .a 는 1 로 읽혔다 — 그래서
+            // 가운데가 <b>흰</b> 원반이 깔렸다. 기획자: "그림자를 담당하는 부분이
+            // 저렇게 하얗게 나오는 것 같아."
+            //
+            // RGBA32 로 두고 RGB 를 명시적으로 검정으로 박으면 읽히는 값이 하나로 정해진다.
+            // 64x64 짜리라 메모리는 16KB 다 — 아낄 자리가 아니다.
+            s_disc = new Texture2D(N, N, TextureFormat.RGBA32, false) { name = "BlobDisc" };
             var px = new Color[N * N];
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
