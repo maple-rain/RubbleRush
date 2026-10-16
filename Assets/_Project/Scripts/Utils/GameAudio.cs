@@ -115,12 +115,31 @@ namespace Demo.Utils
         /// </summary>
         /// <b>지금은 VfxBurst 로 켜 둔다</b> [지시 2026-10-16] — 그것만 듣고 박자를
         /// 보기 위해서다. <b>F8 로 끌 수 있고</b>, 확인이 끝나면 None 으로 되돌릴 것.
-        public static Sfx Solo { get; set; } = Sfx.VfxBurst;
+        public static Sfx Solo
+        {
+            get => s_solo;
+            set
+            {
+                s_solo = value;
+                // <b>배경음과 환경음도 같이 끈다</b> [지시 2026-10-16].
+                // 하나만 들으려는 것인데 음악이 깔려 있으면 여운이 그 위에 묻힌다.
+                MusicPlayer m = MusicPlayer.Current;
+                if (m != null) m.Volume = value == Sfx.None ? s_musicWas : 0f;
+                foreach (AudioSource src in Object.FindObjectsByType<AudioSource>(
+                             FindObjectsSortMode.None))
+                    if (src.loop) src.mute = value != Sfx.None;   // 루프 = 환경음
+            }
+        }
+
+        static Sfx s_solo = Sfx.VfxBurst;
+
+        /// <summary>솔로를 켜기 전의 배경음 크기. 끌 때 되돌린다.</summary>
+        static float s_musicWas = 0.35f;
 
         void PlayHere(Sfx id, Vector3 at, float volumeScale, float pitchScale)
         {
             if (bank == null || pool == null || master <= 0f) return;
-            if (Solo != Sfx.None && id != Solo) return;
+            if (s_solo != Sfx.None && id != s_solo) return;
 
             SoundBank.Entry e = bank.Find(id);
             if (e == null || e.clips == null || e.clips.Length == 0) return;
