@@ -238,6 +238,29 @@ namespace Demo.Destruction
             Utils.GameAudio.Play(Data.Sfx.FloorCollapse, point);
         }
 
+        /// <summary>
+        /// <b>건물을 무너뜨린 그 한 방</b> [지시 2026-10-16].
+        ///
+        /// 기획자: "마지막에 건물이 무너지는 펀치를 날릴 때 사운드를 이거로 할까,
+        /// 무너지는 느낌을 주니까."
+        ///
+        /// <see cref="OnStrike"/>와 같은 자리에서 울리되 소리만 다르다. 평타는 초당
+        /// 다섯 번이라 짧고 날카롭지만, 이것은 한 건물에 한 번뿐이라 길게 끌린다
+        /// (실측: 저역 36.5% · 감쇠 820ms).
+        ///
+        /// <b>흔들림은 완파 쪽 값을 쓴다.</b> 마지막 타격이 평타와 같은 세기로
+        /// 흔들리면 "이게 끝이다"가 손에 안 온다.
+        ///
+        /// 두 배로 부수기의 늦은 두 번째 팔은 예약하지 않는다 — 건물이 이미
+        /// 무너지는 중이라 뒤따라오는 소리가 허공에서 난다.
+        /// </summary>
+        public void OnFinishingStrike(Vector3 point)
+        {
+            Impact(Mathf.Lerp(strikeShakeMax, collapseShake, 0.5f),
+                   collapseShakeSeconds, collapseHitStop);
+            Utils.GameAudio.Play(Data.Sfx.Finisher, point);
+        }
+
         /// <summary>대상이 완전히 부서진 순간.</summary>
         public void OnBroken(Vector3 point)
         {

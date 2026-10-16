@@ -133,7 +133,12 @@ namespace Demo.EditorTools
 
         // 아래 셋은 <b>[제안·미승인]</b>이다. 새 항목이 생길 때의 출발값일 뿐,
         // 기획자가 한 번 고치면 이 도구는 다시 안 덮는다.
-        static float Jitter(Sfx id) => id == Sfx.Strike ? 0.12f : 0.06f;
+        // <b>피치는 0이다</b> [지시 2026-10-15: "이걸 왜 계속 피치를 건드리고 그러는거야"].
+        //
+        // 그때 SoundBank의 15개 항목을 전부 0으로 되돌렸는데 <b>이 함수는 안 고쳤다.</b>
+        // 그래서 새 소리를 더하고 Demo/16을 누르면 그 항목에만 피치가 도로 붙었다.
+        // 자동화가 되돌린 결정을 다시 끌고 오는 꼴이라 여기서 끊는다.
+        static float Jitter(Sfx id) => 0f;
         static float Gap(Sfx id) => id == Sfx.Swallow ? 0.05f : id == Sfx.Strike ? 0.03f : 0f;
         static bool Flat(Sfx id) => id == Sfx.HoleLevelUp || id == Sfx.QuotaDone;
 

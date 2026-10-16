@@ -217,7 +217,10 @@ namespace Demo.Destruction
                 // 통째로 비었다. 기획자: "마지막 타격시 타격 사운드가 발생하지 않고 무너지는 현상".
                 //
                 // 때린 것은 때린 소리가 나야 한다. 건너뛸 것은 겹치는 층 붕괴 쪽이다.
-                if (floorJustBlew && Gauge < 1f) fx.OnFloorCollapse(targetPoint);
+                // <b>마지막 한 방은 소리가 다르다</b> [지시 2026-10-16].
+                // 건물을 무너뜨리는 타격이라 길게 끌리는 음원을 따로 쓴다.
+                if (Gauge >= 1f) fx.OnFinishingStrike(targetPoint);
+                else if (floorJustBlew) fx.OnFloorCollapse(targetPoint);
                 else fx.OnStrike(Gauge, targetPoint);
             }
 
