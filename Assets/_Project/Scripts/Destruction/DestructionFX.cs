@@ -302,11 +302,24 @@ namespace Demo.Destruction
             }
 
             Utils.GameAudio.Play(Data.Sfx.Broken, point, 1f, pitch);
+        }
 
-            // <b>연출에 따라붙는 소리</b> [지시 2026-10-16]. 타격·파괴와 따로 울린다 —
-            // "펀치 사운드 + 맞는곳의 사운드 + VFX의 사운드". 지금은 VFX가 아직
-            // 안 보이지만 소리 자리를 먼저 잡아 둔다.
-            Utils.GameAudio.Play(Data.Sfx.VfxBurst, point, 1f, pitch);
+        /// <summary>
+        /// <b>막타와 완파 사이를 메운다</b> [지시 2026-10-16].
+        ///
+        /// 기획자: "피니셔와 브로큰 사이의 공백을 채울게 필요함."
+        /// 마지막 타격이 들어가고 완파음이 울리기까지 최대 1.2초가 비어 있었다.
+        /// 그 사이가 <b>건물이 실제로 무너지는 시간</b>인데 아무 소리도 없었다.
+        ///
+        /// 전에는 이 소리를 완파와 <b>같은 순간에</b> 울렸다. 큰 소리 둘이 겹쳐서
+        /// 어디서 뭐가 나는지 안 들렸다 — 기획자: "어디에 넣은건지 명확하지 않음,
+        /// 이상함 어색함." 시간을 벌려 놓으면 둘이 제 자리를 찾는다.
+        ///
+        ///     막타 ──(0.3초)── 이것 ──(최대 1.2초)── 완파
+        /// </summary>
+        public void OnCollapseBurst(Vector3 point)
+        {
+            Utils.GameAudio.Play(Data.Sfx.VfxBurst, point);
         }
 
         /// <summary>

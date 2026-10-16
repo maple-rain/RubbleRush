@@ -135,9 +135,25 @@ namespace Demo.Destruction
         /// 그 대가로 <b>다 부순 벽을 몇 번 더 두드려야</b> 끝났다.
         /// 기다리는 일을 여기로 옮기면 마지막 탭이 곧 마지막 쾅이 된다.
         /// </summary>
+        /// <summary>막타와 완파 사이, 무너지는 소리를 한 번 울릴 시각(초).</summary>
+        [SerializeField, Range(0.05f, 1f),
+         Tooltip("막타 뒤 이만큼 지나면 무너지는 소리를 울린다 [제안·미승인 2026-10-16]. "
+                 + "0.3이면 막타와 완파 사이의 빈 구간 한가운데쯤이다")]
+        float burstDelay = 0.30f;
+
+        bool burstDone;
+
         void TickFinish()
         {
             finishElapsed += Time.deltaTime;
+
+            // <b>사이를 메운다</b> [지시 2026-10-16: "피니셔와 브로큰 사이의 공백"].
+            // 막타가 들어가고 완파음이 울리기까지 최대 1.2초가 비어 있었다.
+            if (!burstDone && finishElapsed >= burstDelay)
+            {
+                burstDone = true;
+                if (fx != null) fx.OnCollapseBurst(targetPoint);
+            }
 
             // 멈춰 서 있는데 안 끝나는 일이 없도록 상한을 둔다.
             if (proxy.Animating && finishElapsed < finishMaxSeconds) return;
@@ -232,6 +248,7 @@ namespace Demo.Destruction
         {
             finishing = true;
             finishElapsed = 0f;
+            burstDone = false;
         }
 
         void CloseOut()

@@ -40,14 +40,17 @@ namespace Demo.Utils
         const float ShotGap = 0.022f;
 
         /// <summary>한 장이 사라지는 데 걸리는 시간(초). 길수록 잔상이 오래 남는다.</summary>
-        const float Life = 0.20f;
+        const float Life = 0.28f;
 
         /// <summary>획의 두께(m). 팔뚝 굵기쯤.</summary>
-        const float Thickness = 0.26f;
+        const float Thickness = 0.42f;
 
         /// <summary>가장 진할 때의 알파. <b>0.45에서 올렸다</b> — 두 번 "안 보인다"가
         /// 나왔으니 과하게 두고 줄이는 편이 낫다 [제안·미승인 2026-10-16].</summary>
         const float Alpha = 0.85f;
+
+        /// <summary>주먹 너머로 더 뻗는 비율. 0이면 팔뚝 길이 그대로다.</summary>
+        const float Overreach = 0.70f;
 
         // ── 상태 ─────────────────────────────────────────────────────────────
 
@@ -217,6 +220,14 @@ namespace Demo.Utils
             float len = along.magnitude;
             if (len < 0.001f) { along = Vector3.forward; len = 0.3f; }
 
+            // <b>주먹 너머로 더 뻗는다</b> [고침 2026-10-16]. 팔뚝(0.46m)만 그리면
+            // 7m 거리에서 82px 라 눈에 안 걸린다. 주먹 앞으로 이만큼 더 끌어
+            // 휘두른 자취로 읽히게 한다.
+            Vector3 dirN = along / len;
+            hand += dirN * (len * Overreach);
+            along = hand - elbow;
+            len = along.magnitude;
+
             t.position = (hand + elbow) * 0.5f;
             t.localScale = new Vector3(len, Thickness * scale, 1f);
 
@@ -274,8 +285,16 @@ namespace Demo.Utils
 
                 // <b>움직이지 않는다.</b> 잔상은 팔이 있던 자리에 남는 것이지
                 // 따라다니는 것이 아니다. 옅어지기만 한다.
-                float a = k.Left / Life;
-                mpb.SetColor("_BaseColor", new Color(1f, 1f, 1f, a * a * Alpha));
+                // <b>제곱이 아니라 루트로 눕힌다</b> [고침 2026-10-16].
+                //
+                // 제곱이면 수명의 절반에서 이미 알파가 0.21 로 떨어진다 — 또렷한
+                // 구간이 0.05초(60fps 에서 세 프레임)뿐이라 82x89 픽셀짜리가
+                // 번쩍이고 만다. 기획자가 네 번 "안 보인다"고 한 이유가 이것이었다.
+                // 기하도 블렌딩도 자리도 맞았는데 내가 안 보이게 만들어 뒀다.
+                //
+                // 루트면 절반에서 0.60 이라 끝까지 읽힌다.
+                float a = Mathf.Sqrt(k.Left / Life);
+                mpb.SetColor("_BaseColor", new Color(1f, 1f, 1f, a * Alpha));
                 k.R.SetPropertyBlock(mpb);
 
                 strokes[i] = k;
