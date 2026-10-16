@@ -42,9 +42,28 @@ SRC = Path.home() / "Downloads" / "punch_impact (1).wav"
 OUT = ROOT / "Assets" / "_Project" / "Audio" / "SFX" / "SFX_Finisher_01.wav"
 MATCH_GLOB = "SFX_Strike_*.wav"
 
-PICK = (3.550, 4.470)     # 6번 타. 뒤를 20ms 더 둬서 꼬리를 안 자른다
+# 6번 타. <b>끝을 4.470에서 4.620으로 늘렸다</b> [고침 2026-10-16].
+#
+# 기획자: "마지막에 펀치 후에 스르륵하고 무너지는 사운드가 약간 들려서 그래,
+#          그렇기 때문에 건물이 무너지기 직전의 사운드와 어울린다고 생각했던거고."
+#
+# 그 '스르륵'이 이 음원을 고른 이유인데 <b>내가 그걸 잘라먹고 있었다.</b> 무음 분할이
+# -45dB 문턱으로 끊어서, 그보다 작은 꼬리가 '무음'으로 잘렸다. 다시 재니:
+#
+#   타격 피크   원본 3.570s (-3.5 dBFS)
+#   꼬리 끝     -55dB 기준 4.520s · -60dB 기준 4.570s · -65dB 기준 4.590s
+#   내 구간     4.470s 에서 끊음  ->  100ms 넘게 날아갔고, 거기에 페이드까지 걸려
+#                                    끝자락이 두 번 깎였다
+#
+# 4.620까지 둔다 — -65dB 끝(4.590)보다 30ms 더 있어서 페이드가 꼬리 본체를 안 먹는다.
+# 다음 타가 5.590s라 다른 소리가 섞일 걱정은 없다.
+PICK = (3.550, 4.620)
 LEAD = 0.006              # 타격 앞에 남길 여유(초). 0이면 어택이 잘려 '툭' 한다
-TAIL_FADE = 0.012         # 끝을 눕히는 시간(초). 안 하면 뚝 끊겨 클릭이 난다
+
+# 페이드를 12 -> 25ms로 늘렸다. 꼬리가 작아서 짧게 끊으면 '툭' 하고 사라지는데,
+# 길게 눕히면 스르륵이 자연히 멎는 것처럼 들린다. 꼬리 본체(-65dB 끝)보다
+# 뒤에서만 걸리므로 들리는 부분은 안 깎인다.
+TAIL_FADE = 0.025
 CEILING = 0.99
 
 
@@ -69,6 +88,21 @@ def write(path, xs, sr):
     w.setframerate(sr)
     w.writeframes(out.tobytes())
     w.close()
+
+
+def impact_only(xs, sr, pre=0.010, post=0.150):
+    """
+    <b>타격 부분만</b> 잘라 돌려준다 — 음량을 맞출 때 쓴다 [고침 2026-10-16].
+
+    꼬리까지 넣어 평균을 내면 안 된다. 이 음원은 스르륵 꼬리가 1초 가까이 가는데
+    그 구간은 조용하므로 <b>전체 평균을 끌어내린다.</b> 그 값을 평타에 맞추면
+    모자란 만큼을 게인으로 메우게 되어 <b>타격만 과하게 커진다.</b>
+    꼬리는 원래 작아야 하는 것이지 작아서 손해 볼 것이 아니다.
+    """
+    pk = max(range(len(xs)), key=lambda i: abs(xs[i]))
+    s = max(0, pk - int(pre * sr))
+    e = min(len(xs), pk + int(post * sr))
+    return xs[s:e]
 
 
 def heard(xs, sr):
@@ -113,13 +147,15 @@ def main():
         print(f"  맞출 기준이 없다: {sfx / MATCH_GLOB}")
         return 1
 
+    # <b>타격 부분끼리</b> 비교한다. 꼬리 길이가 서로 다르므로 전체를 재면
+    # 꼬리가 긴 쪽이 손해를 보고, 그 손해를 게인으로 메우면 타격만 커진다.
     levels = []
     for f in refs:
         rx, rsr = read(f)
-        levels.append(heard(rx, rsr))
+        levels.append(heard(impact_only(rx, rsr), rsr))
     target = sum(levels) / len(levels)
 
-    mine = heard(seg, sr)
+    mine = heard(impact_only(seg, sr), sr)
     gain = target / (mine + 1e-12)
     peak_after = max(abs(v) for v in seg) * gain
 
@@ -136,7 +172,12 @@ def main():
     print(f"  구간  {PICK[0]:.3f} ~ {PICK[1]:.3f}초  ->  {len(seg)/sr:.3f}초")
     print(f"  기준  Strike {len(refs)}개 평균 체감 {target:.5f}")
     print(f"  게인  x{gain:.3f}{'  (천장에 걸려 줄임)' if capped else ''}")
-    print(f"  결과  피크 {max(abs(v) for v in seg):.3f} · 체감 {heard(seg, sr):.5f}")
+    print(f"  결과  피크 {max(abs(v) for v in seg):.3f} · 타격 체감 {heard(impact_only(seg, sr), sr):.5f}")
+    tail = seg[int(0.20 * sr):]
+    import math as _m
+    tr = _m.sqrt(sum(v * v for v in tail) / max(1, len(tail)))
+    pk = max(abs(v) for v in seg)
+    print(f"  꼬리  {len(tail)/sr:.3f}초 · 피크 대비 {20*_m.log10(tr/(pk+1e-12)):.1f}dB  (스르륵이 여기 있다)")
 
     write(OUT, seg, sr)
     print(f"\n  냈다: {OUT}")
