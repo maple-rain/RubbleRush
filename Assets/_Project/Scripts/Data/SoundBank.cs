@@ -116,6 +116,11 @@ namespace Demo.Data
         /// 소닉붐 7 : 캐논파이어 3 [지시].
         /// </summary>
         VfxBurst = 6,
+        /// <summary>
+        /// 건물이 <b>무너지는 동안</b> [지시 2026-10-16]. VfxBurst 의 긴 판이다.
+        /// 막타와 완파 사이의 공백을 메운다.
+        /// </summary>
+        CollapseBurst = 7,
 
         // ── 수집 ──────────────────────────────────────────
         /// <summary>케이블을 펴기 시작한다</summary>

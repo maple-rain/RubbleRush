@@ -69,6 +69,7 @@ namespace Demo.Utils
         float scale = 1f;
 
         float emitLeft, nextShot;
+        float lastReach;        // 직전 프레임의 손~몸 거리. 되돌아오는 것을 잡는다
         bool emitRight;
 
         MaterialPropertyBlock mpb;
@@ -185,6 +186,12 @@ namespace Demo.Utils
             emitRight = rightArm;
             emitLeft = Shots * ShotGap;
             nextShot = 0f;
+
+            // 이번 주먹의 출발 거리를 기준으로 잡는다. 안 하면 지난 주먹의
+            // 끝 거리와 견주게 되어 첫 프레임에 '되돌아온다'로 잘못 읽는다.
+            Transform h0 = rightArm ? rightHand : leftHand;
+            lastReach = (h0 != null && follow != null)
+                      ? Vector3.Distance(h0.position, follow.position) : 0f;
             Snap();                       // 첫 장은 지금 당장 — 한 프레임도 늦으면 어색하다
         }
 
@@ -206,6 +213,12 @@ namespace Demo.Utils
             Stroke k = strokes[idx];
             Place(k.T, a, b);
             k.Left = Life;
+
+            // <b>켜기 전에 색을 넣는다.</b> LateUpdate 를 기다리면 그 사이 한
+            // 프레임이 머티리얼 기본색(순백)으로 그려진다.
+            if (mpb == null) mpb = new MaterialPropertyBlock();
+            mpb.SetColor("_BaseColor", new Color(1f, 1f, 1f, Alpha));
+            k.R.SetPropertyBlock(mpb);
             k.R.enabled = true;
             strokes[idx] = k;
         }
@@ -259,12 +272,30 @@ namespace Demo.Utils
                 if (eye == null) eye = FindFirstObjectByType<Camera>();
             }
 
-            // 내지르는 동안 계속 찍는다 — 이것이 팔의 궤적이 된다.
+            // <b>뻗는 동안만 찍는다</b> [고침 2026-10-16].
+            //
+            // 기획자: "주먹 바람이 돌아오는 주먹에도 잔상이 남는것처럼 보임."
+            // 시간만 세고 있었더니 주먹이 되돌아오는 길에도 계속 찍혔다.
+            // 돌아오는 자취까지 남으면 '휘둘렀다'가 아니라 '팔이 떨린다'로 보인다.
+            //
+            // 애니메이션 길이를 추측해 맞추지 않는다 — 클립이 바뀌면 또 어긋난다.
+            // <b>손이 몸에서 멀어지는 동안</b>만 찍으면 어떤 클립에서도 맞는다
+            // (Player.FootPlant 가 발이 땅에 닿는 순간을 잡는 방식과 같다).
             if (emitLeft > 0f)
             {
                 emitLeft -= dt;
+
+                Transform h = emitRight ? rightHand : leftHand;
+                if (h != null && follow != null)
+                {
+                    float reach = Vector3.Distance(h.position, follow.position);
+                    // 되돌아오기 시작했으면 그 자리에서 끝낸다.
+                    if (reach < lastReach - 0.002f) emitLeft = 0f;
+                    lastReach = reach;
+                }
+
                 nextShot -= dt;
-                if (nextShot <= 0f) { nextShot = ShotGap; Snap(); }
+                if (emitLeft > 0f && nextShot <= 0f) { nextShot = ShotGap; Snap(); }
             }
 
             if (mpb == null) mpb = new MaterialPropertyBlock();
@@ -272,7 +303,19 @@ namespace Demo.Utils
             for (int i = 0; i < strokes.Count; i++)
             {
                 Stroke k = strokes[i];
-                if (k.Left <= 0f) continue;
+
+                // <b>수명이 끝난 획은 건너뛰지 않고 반드시 끈다</b> [고침 2026-10-16].
+                //
+                // 전에는 여기서 continue 했다. 끄는 일은 '수명이 0을 넘는 그 한
+                // 프레임'에만 일어났고, 그 프레임을 놓치면 <b>영원히 켜진 채로</b>
+                // 남았다. 그리고 프로퍼티 블록이 안 들어간 획은 머티리얼 기본값인
+                // 순백 알파 1.0 으로 그려진다 — 기획자가 네 번 본 "하얀 그림자"가
+                // 그것이다. 발밑에 박혀 있던 이유는 아직 자리를 못 받아서였다.
+                if (k.Left <= 0f)
+                {
+                    if (k.R.enabled) k.R.enabled = false;
+                    continue;
+                }
 
                 k.Left -= dt;
                 if (k.Left <= 0f)
@@ -354,7 +397,10 @@ namespace Demo.Utils
 
             s_mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "PunchWind" };
             s_mat.SetTexture("_BaseMap", tex);
-            s_mat.SetColor("_BaseColor", Color.white);
+            // <b>기본색을 투명으로 둔다.</b> 프로퍼티 블록이 어떤 이유로든 안
+            // 들어간 획은 <b>보이지 않아야</b> 한다 — 흰 사각형으로 뜨는 것보다
+            // 안 보이는 쪽이 백 배 낫다. 세 번째 방어선이다.
+            s_mat.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0f));
 
             // _Surface·_Blend 만으로는 아무 일도 안 일어난다 — 그 둘은 머티리얼 에디터가
             // 읽는 표식일 뿐이고, 실제 블렌딩은 아래 셋이 정한다 [고침 2026-10-16].

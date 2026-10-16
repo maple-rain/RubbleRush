@@ -158,6 +158,17 @@ namespace Demo.Destruction
                 robot.PunchWind(rightArm);   // 주먹 쪽 바람 [지시 2026-10-16]
             }
             Utils.GameAudio.Play(Data.Sfx.Punch, transform.position);
+
+            // <b>연출에 따라붙는 소리</b> [지시 2026-10-16]. 소닉붐 7 : 캐논파이어 3.
+            //
+            // 기획자: "소닉붐과 같은 소리를 구현하자고 레퍼런스까지 줬는데 왜
+            // 사용이 안된거 같냐고." 맞는 지적이었다 — 내가 그것을 <b>완파 한 번</b>에만
+            // 넣어 둬서, 건물 하나를 다 부수는 동안 딱 한 번 울렸다. 거의 안 들린다.
+            //
+            // "펀치 사운드 + 맞는곳의 사운드 + VFX의 사운드" 셋 중 이것이 VFX 몫이고,
+            // VFX(주먹 바람)는 <b>주먹마다</b> 난다. 그러니 소리도 주먹마다 나야 한다.
+            // 0.17초로 짧게 잘라 뒀다 — 연타 간격 0.2초를 안 넘는다.
+            Utils.GameAudio.Play(Data.Sfx.VfxBurst, transform.position);
         }
 
         /// <summary>
@@ -319,7 +330,7 @@ namespace Demo.Destruction
         /// </summary>
         public void OnCollapseBurst(Vector3 point)
         {
-            Utils.GameAudio.Play(Data.Sfx.VfxBurst, point);
+            Utils.GameAudio.Play(Data.Sfx.CollapseBurst, point);
         }
 
         /// <summary>
