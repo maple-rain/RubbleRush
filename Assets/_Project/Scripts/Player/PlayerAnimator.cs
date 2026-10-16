@@ -167,7 +167,8 @@ namespace Demo.Player
                 // 주먹 바람도 여기서 만든다 [지시 2026-10-16]. 같은 try 안에 둔 이유는
                 // 같다 — 연출을 만들다 던진 예외가 <b>Awake의 나머지를 통째로 건너뛰게</b>
                 // 하면 안 된다. 전에 그림자가 그 사고를 냈고 상체 층이 죽었다.
-                wind = Utils.PunchWind.Ensure(transform, punchWindSize);
+                // 애니메이터를 넘긴다 — 휴머노이드면 뼈 이름을 안 보고 팔꿈치를 집는다.
+                wind = Utils.PunchWind.Ensure(anim, punchWindSize);
             }
             catch (System.Exception e)
             {
