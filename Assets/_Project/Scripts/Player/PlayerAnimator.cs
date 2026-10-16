@@ -39,6 +39,10 @@ namespace Demo.Player
          Tooltip("발밑 둥근 그림자의 지름(m). 실시간 그림자를 껐으므로 이것이 대신한다")]
         float blobShadowSize = 2.4f;
 
+        [SerializeField, Range(0.3f, 3f),
+         Tooltip("주먹 바람의 크기 배율 [제안·미승인 2026-10-16]. 눈으로 보고 고를 값이다")]
+        float punchWindSize = 1f;
+
         [Header("타격 — 골반 비틀림")]
         [SerializeField, Range(4f, 80f), Tooltip("주먹이 나갈 때 골반 비틀림이 올라오는 속도")]
         float twistRise = 40f;
@@ -159,10 +163,16 @@ namespace Demo.Player
             try
             {
                 Utils.BlobShadow.Ensure(player != null ? player.transform : transform, blobShadowSize);
+
+                // 주먹 바람도 여기서 만든다 [지시 2026-10-16]. 같은 try 안에 둔 이유는
+                // 같다 — 연출을 만들다 던진 예외가 <b>Awake의 나머지를 통째로 건너뛰게</b>
+                // 하면 안 된다. 전에 그림자가 그 사고를 냈고 상체 층이 죽었다.
+                wind = Utils.PunchWind.Ensure(transform, punchWindSize);
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[PlayerAnimator] 발밑 그림자를 못 만들었다 — 움직임은 그대로다: " + e.Message);
+                Debug.LogWarning("[PlayerAnimator] 발밑 그림자나 주먹 바람을 못 만들었다 — "
+                               + "움직임은 그대로다: " + e.Message);
             }
 
             // 뼈를 한 번만 찾아 둔다 (규칙 5).
@@ -281,6 +291,40 @@ namespace Demo.Player
             lastRight = rightArm;
             rush.Note();
         }
+
+        /// <summary>
+        /// 주먹 쪽 바람 [지시 2026-10-16]. 애니메이션과 따로 두는 이유는
+        /// <see cref="PunchFinisher"/>처럼 <b>바람 없이 애니메이션만</b> 내보내야 하는
+        /// 자리가 있을 수 있어서다.
+        ///
+        /// 못 만들어도 움직임은 그대로다 — 연출이 본동작을 막아서는 안 된다
+        /// (<see cref="Utils.BlobShadow"/>에서 한 번 당한 적이 있다).
+        /// </summary>
+        public void PunchWind(bool rightArm)
+        {
+            if (wind == null) return;
+            try { wind.Burst(rightArm); }
+            catch (System.Exception e)
+            {
+                wind = null;        // 한 번 실패하면 매 타격마다 던지게 두지 않는다
+                Debug.LogWarning("[PlayerAnimator] 주먹 바람을 못 냈다 — 끄고 간다: " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// 걸려 있는 주먹을 거둔다 [고침 2026-10-16].
+        ///
+        /// <c>SetTrigger</c>로 건 방아쇠는 <b>소비될 때까지 남아 있다.</b> 파괴 화면이
+        /// 끝나는 순간에 걸린 것이 그대로 남으면 필드로 돌아간 뒤에 터져서,
+        /// 로봇이 허공에 주먹을 지른다. <c>ResetTrigger</c>가 그 대기를 지운다.
+        /// </summary>
+        public void CancelPunch()
+        {
+            if (anim == null) return;
+            anim.ResetTrigger(PunchId);
+        }
+
+        Utils.PunchWind wind;
 
         void Update()
         {

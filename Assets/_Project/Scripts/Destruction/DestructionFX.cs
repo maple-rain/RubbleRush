@@ -152,8 +152,27 @@ namespace Demo.Destruction
         public void OnPunch(bool rightArm)
         {
             if (robot == null) robot = FindFirstObjectByType<Player.PlayerAnimator>();
-            if (robot != null) robot.Punch(rightArm);
+            if (robot != null)
+            {
+                robot.Punch(rightArm);
+                robot.PunchWind(rightArm);   // 주먹 쪽 바람 [지시 2026-10-16]
+            }
             Utils.GameAudio.Play(Data.Sfx.Punch, transform.position);
+        }
+
+        /// <summary>
+        /// 파괴 화면을 나간다. <b>걸려 있는 주먹을 거둔다</b> [고침 2026-10-16].
+        ///
+        /// 기획자: "마지막에 허공을 향해 주먹을 휘두르는 현상."
+        ///
+        /// 마지막 탭이 애니메이터에 Punch 방아쇠를 걸어 두는데, 그 직후 완파 연출이
+        /// 끝나면서 필드로 돌아간다. <b>소비되지 않은 방아쇠는 사라지지 않는다</b> —
+        /// 그대로 남아 있다가 필드에서 터져서, 로봇이 아무것도 없는 허공에 주먹을 지른다.
+        /// </summary>
+        public void OnLeaveDemolition()
+        {
+            if (robot != null) robot.CancelPunch();
+            standLeft = 0f;      // 늦게 치기로 예약된 두 번째 팔도 거둔다
         }
 
         public void OnStrike(float progress01, Vector3 point)

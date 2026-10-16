@@ -239,7 +239,13 @@ namespace Demo.Destruction
             if (spawner != null && Target.Data != null)
                 spawner.SpawnFor(Target.Data, Target.transform.position);
 
-            if (fx != null) fx.OnBroken(targetPoint);
+            if (fx != null)
+            {
+                fx.OnBroken(targetPoint);
+                // 필드로 돌아가기 전에 걸려 있는 주먹을 거둔다 [고침 2026-10-16].
+                // 안 거두면 소비되지 않은 방아쇠가 필드에서 터져 허공을 친다.
+                fx.OnLeaveDemolition();
+            }
 
             Debug.Log($"[DemolitionSession] {Target.Data?.id} 파괴 — 탭 {TapCount}회");
             GameModeController.Instance.ExitDemolition();
