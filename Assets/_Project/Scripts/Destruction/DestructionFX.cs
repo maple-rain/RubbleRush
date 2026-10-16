@@ -161,8 +161,7 @@ namespace Demo.Destruction
 
             // 연출 소리(VfxBurst)는 여기서 안 울린다 — <b>주먹이 닿는 정점</b>에
             // 맞춰 ImpactAfter 가 울린다 [고침 2026-10-16]. 아래 burstAt 참조.
-            burstAt = 1f;
-            burstPoint = transform.position;
+            // <b>매 주먹이 아니라 첫 타에만</b> 예약한다 — OnStrike 가 정한다.
         }
 
         /// <summary>
@@ -185,10 +184,28 @@ namespace Demo.Destruction
             Impact(Mathf.Lerp(strikeShake, strikeShakeMax, Mathf.Clamp01(progress01)),
                    strikeShakeSeconds, strikeHitStop);
 
-            // 셰이크와 같은 곡선을 탄다 — 건물이 깎여 갈수록 소리도 커진다.
-            // 박자를 셋으로 나눈 이유(위 표)가 소리에도 그대로 적용된다.
-            Utils.GameAudio.Play(Data.Sfx.Strike, point,
-                                 Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(progress01)));
+            // <b>첫 타는 크게, 연타는 그 꼬리 위에서</b> [지시 2026-10-16].
+            //
+            // 기획자: "첫 타격을 들어보면 큰 타격음 이후 약간의 잔상음이 남잖아.
+            // 이걸 구현해야하고, 첫 타격음이 엄청 크게 타격의 쾌감을 주잖아."
+            //
+            // 그동안 나는 음원을 깎고 섞고 피치를 건드렸는데, 정작 필요한 것은
+            // <b>타마다 크기를 다르게 하는 것</b>이었다. 레퍼런스가 시원한 이유는
+            // 소리 자체가 아니라 <b>첫 타가 크고 나머지가 그 아래로 깔리기</b> 때문이다.
+            // 다 같은 크기로 때리면 아무리 좋은 음원도 기관총이 된다.
+            //
+            // 그 신호가 이 코드에 이미 있었다 — PunchRush.Level01 은 첫 타에서 0,
+            // 연타에서 1이다. 음량을 1-rush 로 걸면 첫 타가 제일 크다.
+            // <b>피치는 안 건드린다. 섞지도 않는다.</b>
+            float rush01 = robot != null ? robot.Rush01 : 0f;
+            float byProgress = Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(progress01));
+            float byRush = Mathf.Lerp(1f, flurryVolume, rush01);
+
+            Utils.GameAudio.Play(Data.Sfx.Strike, point, byProgress * byRush);
+
+            // <b>첫 타에만 꼬리를 얹는다.</b> 큰 한 방 뒤에 남는 울림이 그것이고,
+            // 연타는 그 꼬리 위에서 울린다. 매 타마다 얹으면 겹겹이 쌓여 진흙이 된다.
+            if (rush01 <= firstHitBelow) { burstAt = byProgress; burstPoint = point; }
 
             // "두 배로 부수기"를 고르면 <b>보이지 않는 두 번째 팔</b>이 한 박자 늦게 한 대 더 친다
             // [지시 2026-10-14, 죠죠의 스탠드]. 지금은 소리와 충격만이다 — 팔을 실제로
@@ -216,6 +233,16 @@ namespace Demo.Destruction
         /// <summary>정점에 울릴 연출 소리가 예약돼 있는가. 자리는 burstPoint 다.</summary>
         float burstAt;
         Vector3 burstPoint;
+
+        [SerializeField, Range(0.2f, 1f),
+         Tooltip("연타가 최대일 때의 타격음 크기 [제안·미승인 2026-10-16]. "
+                 + "1이면 첫 타와 같고, 작을수록 첫 타가 도드라진다")]
+        float flurryVolume = 0.55f;
+
+        [SerializeField, Range(0f, 0.6f),
+         Tooltip("이 아래면 '첫 타'로 보고 꼬리를 얹는다 [제안·미승인 2026-10-16]. "
+                 + "PunchRush.Level01 기준 — 0이 단타, 1이 최대 연타다")]
+        float firstHitBelow = 0.25f;
 
         float standLeft;
         float standVolume;
@@ -394,7 +421,7 @@ namespace Demo.Destruction
             // 흔들림이 이미 정점을 기다리고 있었다(StrikePeakCount). 같은 자리에
             // 붙이면 소리와 화면과 주먹이 한 박자에 떨어진다. 실측된 정점은
             // 방아쇠에서 130ms 뒤다.
-            if (burstAt > 0f) Utils.GameAudio.Play(Data.Sfx.VfxBurst, burstPoint);
+            if (burstAt > 0f) Utils.GameAudio.Play(Data.Sfx.VfxBurst, burstPoint, burstAt);
             burstAt = 0f;
         }
 

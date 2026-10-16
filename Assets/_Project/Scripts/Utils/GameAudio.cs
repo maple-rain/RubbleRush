@@ -122,7 +122,12 @@ namespace Demo.Utils
         /// SoundBank 의 음량은 안 건드린다 — 0 으로 적어 끄면 기획자가 맞춰 둔 값이
         /// 지워지고 되돌릴 때 기억에 의존하게 된다. 거르기만 한다.
         /// </summary>
-        public static Sfx Solo { get; set; } = Sfx.VfxBurst;
+        public static Sfx Solo { get; set; } =
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Sfx.VfxBurst;      // 지금 박자를 듣고 있다. F8 로 끈다
+#else
+            Sfx.None;          // <b>출시 빌드에는 절대 안 따라간다</b>
+#endif
 
         /// <summary>
         /// 배경음·환경음을 <b>매 프레임 확인해서</b> 맞춘다 [고침 2026-10-16].
@@ -138,16 +143,28 @@ namespace Demo.Utils
         void LateUpdate()
         {
             bool soloing = Solo != Sfx.None;
+            if (!soloing && !s_muted) return;   // 평소에는 한 줄도 안 돈다
 
+            // <b>내가 끈 것만 되돌린다</b> [고침 2026-10-16].
+            //
+            // 전에는 "음량이 0이면 되돌린다"로 추론했다. 그러면 기획자가 스스로
+            // 0으로 줄여 둔 것까지 멋대로 올린다 — 끈 적이 없는데 켜 주는 꼴이다.
+            // 껐다는 사실을 직접 들고 있으면 그럴 일이 없다.
             MusicPlayer m = MusicPlayer.Current;
             if (m != null)
             {
-                if (soloing)
+                if (soloing && !s_muted)
                 {
-                    if (m.Volume > 0f) s_musicWas = m.Volume;   // 끄기 전 크기를 기억
-                    if (m.Volume != 0f) m.Volume = 0f;
+                    s_musicWas = m.Volume;
+                    m.Volume = 0f;
+                    s_muted = true;
                 }
-                else if (m.Volume == 0f && s_musicWas > 0f) m.Volume = s_musicWas;
+                else if (!soloing && s_muted)
+                {
+                    m.Volume = s_musicWas;
+                    s_muted = false;
+                }
+                else if (soloing && m.Volume != 0f) m.Volume = 0f;   // 누가 도로 켜 놨으면
             }
 
             // 루프로 도는 AudioSource = 환경음·견인음. 한 번에 다 잡는다.
@@ -158,7 +175,8 @@ namespace Demo.Utils
                 if (src.loop && src.mute != soloing) src.mute = soloing;
         }
 
-        static float s_musicWas = 0.35f;
+        static float s_musicWas;
+        static bool s_muted;      // 배경음을 '내가' 껐는가
 
         void PlayHere(Sfx id, Vector3 at, float volumeScale, float pitchScale)
         {
