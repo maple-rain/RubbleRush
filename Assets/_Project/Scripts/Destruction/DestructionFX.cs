@@ -205,7 +205,10 @@ namespace Demo.Destruction
 
             // <b>첫 타에만 꼬리를 얹는다.</b> 큰 한 방 뒤에 남는 울림이 그것이고,
             // 연타는 그 꼬리 위에서 울린다. 매 타마다 얹으면 겹겹이 쌓여 진흙이 된다.
-            if (rush01 <= firstHitBelow) { burstAt = byProgress; burstPoint = point; }
+            // 자리는 <b>매 타마다</b> 기록한다 — 섬광이 거기서 터져야 한다.
+            // 꼬리(burstAt)만 첫 타에 건다.
+            burstPoint = point;
+            if (rush01 <= firstHitBelow) burstAt = byProgress;
 
             // "두 배로 부수기"를 고르면 <b>보이지 않는 두 번째 팔</b>이 한 박자 늦게 한 대 더 친다
             // [지시 2026-10-14, 죠죠의 스탠드]. 지금은 소리와 충격만이다 — 팔을 실제로
@@ -409,7 +412,28 @@ namespace Demo.Destruction
             // 정지만 뺀다. 멈추면 애니메이션도 멈춰서 다음 주먹이 못 나가기 때문이다.
             Shake(magnitude, shakeSeconds);
             float rush = robot != null ? robot.Rush01 : 0f;
-            if (rush <= rushSuppressAbove && stop != null) stop.Hold(hitStopScale);
+
+            // <b>맞는 자리에서 섬광이 터진다</b> [지시 2026-10-16].
+            //
+            // 기획자: "타격시 + 연타시 타격감이 없음, 허공에 헛손질하는것으로
+            // 밖에 보이지가 않음." 문자 그대로 맞는 말이었다 — 그동안 만든 연출이
+            // 전부 <b>팔 쪽</b>이었고 주먹이 닿는 지점에는 아무 일도 없었다.
+            // 벽은 게이지가 찰 때만 조금씩 갈라질 뿐이다.
+            Utils.HitFlash.Pop(burstPoint,
+                               Mathf.Lerp(0.85f, 1.25f, rush));
+
+            // <b>연타에도 멈춤을 조금은 남긴다</b> [고침 2026-10-16].
+            //
+            // 전에는 러쉬 중에 정지를 통째로 뺐다. 멈추면 애니메이션도 멈춰
+            // 다음 주먹이 못 나가기 때문인데, 그래서 <b>제일 신나야 할 구간에
+            // 손맛이 없었다.</b> 초당 20타면 간격이 50ms 라 통째로는 못 쓰지만,
+            // 잘게 남기면 끊기지 않으면서 손에 걸린다.
+            if (stop != null)
+                stop.Hold(rush <= rushSuppressAbove
+                          ? hitStopScale
+                          : Mathf.Lerp(hitStopScale, 1f, (rush - rushSuppressAbove)
+                                       / Mathf.Max(0.01f, 1f - rushSuppressAbove)) * 0.55f
+                            + 0.45f);
 
             // <b>연출 소리도 여기서 울린다</b> [고침 2026-10-16].
             //
