@@ -189,9 +189,7 @@ namespace Demo.Utils
 
             // 이번 주먹의 출발 거리를 기준으로 잡는다. 안 하면 지난 주먹의
             // 끝 거리와 견주게 되어 첫 프레임에 '되돌아온다'로 잘못 읽는다.
-            Transform h0 = rightArm ? rightHand : leftHand;
-            lastReach = (h0 != null && follow != null)
-                      ? Vector3.Distance(h0.position, follow.position) : 0f;
+            lastReach = Reach();
             Snap();                       // 첫 장은 지금 당장 — 한 프레임도 늦으면 어색하다
         }
 
@@ -254,6 +252,30 @@ namespace Demo.Utils
                        : Quaternion.LookRotation(toEye);
         }
 
+        /// <summary>
+        /// 팔이 <b>얼마나 펴졌는가</b> — 손에서 위팔(어깨)까지의 거리(m).
+        ///
+        /// 기준을 두 번 잘못 잡았다 [고침 2026-10-16]:
+        ///   1. 발밑에서 손까지의 거리 — 주먹은 가슴 높이에서 나가므로 거의 안 변한다
+        ///   2. 로봇 로컬의 앞뒤(z) — 이 리그는 대기 자세에서 팔이 옆으로 벌어져 있어
+        ///      (손의 로컬 좌표가 x 0.718 · z 0.033) 앞뒤 축이 뜻을 갖지 않는다
+        ///
+        /// 물리적으로 확실한 것은 하나다 — <b>팔이 펴지면 손과 어깨가 멀어진다.</b>
+        /// 팔꿈치까지의 거리는 뼈 길이라 늘 일정하므로(0.461m) 쓸 수 없고,
+        /// 위팔까지는 팔꿈치가 펴지는 만큼 늘어난다(대기 0.976m).
+        /// 뼈 이름에도 클립 길이에도 기대지 않는다.
+        /// </summary>
+        float Reach()
+        {
+            Transform h = emitRight ? rightHand : leftHand;
+            Transform e = emitRight ? rightElbow : leftElbow;
+            if (h == null) return 0f;
+            Transform shoulder = e != null ? e.parent : null;
+            if (shoulder == null) return follow != null
+                ? Vector3.Distance(h.position, follow.position) : 0f;
+            return Vector3.Distance(h.position, shoulder.position);
+        }
+
         int Free()
         {
             for (int i = 0; i < strokes.Count; i++) if (strokes[i].Left <= 0f) return i;
@@ -285,14 +307,10 @@ namespace Demo.Utils
             {
                 emitLeft -= dt;
 
-                Transform h = emitRight ? rightHand : leftHand;
-                if (h != null && follow != null)
-                {
-                    float reach = Vector3.Distance(h.position, follow.position);
-                    // 되돌아오기 시작했으면 그 자리에서 끝낸다.
-                    if (reach < lastReach - 0.002f) emitLeft = 0f;
-                    lastReach = reach;
-                }
+                float reach = Reach();
+                // 되돌아오기 시작했으면 그 자리에서 끝낸다.
+                if (reach < lastReach - 0.001f) emitLeft = 0f;
+                lastReach = reach;
 
                 nextShot -= dt;
                 if (emitLeft > 0f && nextShot <= 0f) { nextShot = ShotGap; Snap(); }
