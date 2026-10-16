@@ -164,9 +164,21 @@ namespace Demo.Utils
             s_mat = new Material(sh) { name = "BlobShadow" };
             s_mat.SetTexture("_BaseMap", s_disc);
             s_mat.SetColor("_BaseColor", new Color(0f, 0f, 0f, 0.45f));
-            s_mat.SetFloat("_Surface", 1f);                        // 투명
-            s_mat.SetFloat("_Blend", 0f);                          // 알파 블렌드
+            // <b>_Surface·_Blend 만으로는 투명해지지 않는다</b> [고침 2026-10-16].
+            //
+            // 그 둘은 URP 머티리얼 <b>에디터가</b> 읽는 표식이다. 코드로 만들면 에디터가
+            // 안 돌므로 실제 블렌드 상태(_SrcBlend/_DstBlend)는 기본값 One/Zero,
+            // 즉 <b>불투명</b>으로 남는다. 실측하니 정말 그랬다 — 플레이 중에 읽어 보니
+            // _SrcBlend=1 _DstBlend=0 이었다.
+            //
+            // 그래서 알파 0.45짜리 검정이 <b>알파가 통째로 무시된 검은 사각형</b>으로
+            // 깔렸다. 기획자: "캐릭터 아래에 이상한 이펙트가 나오는 현상."
+            s_mat.SetFloat("_Surface", 1f);                        // 표식
+            s_mat.SetFloat("_Blend", 0f);
+            s_mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             s_mat.SetFloat("_ZWrite", 0f);
+            s_mat.SetFloat("_AlphaClip", 0f);
             s_mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             s_mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             return s_mat;

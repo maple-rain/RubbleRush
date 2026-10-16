@@ -45,8 +45,9 @@ namespace Demo.Utils
         /// <summary>획의 두께(m). 팔뚝 굵기쯤.</summary>
         const float Thickness = 0.26f;
 
-        /// <summary>가장 진할 때의 알파.</summary>
-        const float Alpha = 0.45f;
+        /// <summary>가장 진할 때의 알파. <b>0.45에서 올렸다</b> — 두 번 "안 보인다"가
+        /// 나왔으니 과하게 두고 줄이는 편이 낫다 [제안·미승인 2026-10-16].</summary>
+        const float Alpha = 0.85f;
 
         // ── 상태 ─────────────────────────────────────────────────────────────
 
@@ -341,7 +342,13 @@ namespace Demo.Utils
             s_mat.SetFloat("_Surface", 1f);
             s_mat.SetFloat("_Blend", 1f);
             s_mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            // <b>덧셈이 아니라 알파 블렌딩</b> [고침 2026-10-16].
+            //
+            // 처음엔 덧셈(One)으로 뒀다. 덧셈은 <b>빛을 더하는</b> 방식이라
+            // 어두운 배경에서만 산다 — 파괴 화면은 대낮에 밝은 콘크리트 벽이라
+            // 더해 봤자 흰색에서 포화될 뿐 거의 안 보인다.
+            // 기획자가 두 번 "이펙트 안 나옴"이라고 한 마지막 이유가 이것이다.
+            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             s_mat.SetFloat("_ZWrite", 0f);
             s_mat.SetFloat("_AlphaClip", 0f);
             s_mat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
