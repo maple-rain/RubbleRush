@@ -58,6 +58,26 @@ MATCH_GLOB = "SFX_Strike_*.wav"
 # 4.620까지 둔다 — -65dB 끝(4.590)보다 30ms 더 있어서 페이드가 꼬리 본체를 안 먹는다.
 # 다음 타가 5.590s라 다른 소리가 섞일 걱정은 없다.
 PICK = (3.550, 4.620)
+
+# <b>타격 부분을 떼어낸다</b> [지시 2026-10-16].
+#
+# 기획자: "마지막 펀치에 스르륵 사운드 부분만 넣은건가? 타격 지점에서 나는
+#          소리로 바꾸면 되지 않을까."
+#
+# 재 보니 관찰이 맞았다. 이 음원의 타격은 평타보다 <b>6dB 약하고 뾰족하지 않다</b>:
+#
+#   평타(Strike_13)  -28dB 에서 올라가 0.09s 에 -1.7dB 로 뾰족하게 선다
+#   이 음원          처음부터 -7.6dB 로 평평하다가 내려간다
+#
+# 그래서 '때렸다'가 아니라 '울린다'로 들린다. 둘을 같이 틀면 더 나쁘다 —
+# 이 음원의 몸통이 평타의 정점보다 <b>90ms 먼저</b> 도착해서 두 번 친 것처럼 된다.
+#
+# 그래서 타격 몸통을 버리고 <b>스르륵부터</b> 쓴다. 때리는 소리는 평타가 맡고
+# (DestructionFX.OnFinishingStrike 가 둘을 같이 울린다), 이 파일은 그 뒤에
+# 무너지는 소리만 보탠다. 섞어서 한 파일로 만들지 않는 이유는 전에 배웠다 —
+# 겹치면 크레스트가 죽어 먹먹해진다.
+DROP_IMPACT = 0.120       # 구간 시작에서 이만큼을 버린다. -16dB 까지 내려온 자리다
+
 LEAD = 0.006              # 타격 앞에 남길 여유(초). 0이면 어택이 잘려 '툭' 한다
 
 # 페이드를 12 -> 25ms로 늘렸다. 꼬리가 작아서 짧게 끊으면 '툭' 하고 사라지는데,
@@ -131,7 +151,7 @@ def main():
         return 1
 
     xs, sr = read(SRC)
-    s = max(0, int((PICK[0] - LEAD) * sr))
+    s = max(0, int((PICK[0] + DROP_IMPACT - LEAD) * sr))
     e = min(len(xs), int(PICK[1] * sr))
     seg = xs[s:e]
 
@@ -155,8 +175,21 @@ def main():
         levels.append(heard(impact_only(rx, rsr), rsr))
     target = sum(levels) / len(levels)
 
-    mine = heard(impact_only(seg, sr), sr)
-    gain = target / (mine + 1e-12)
+    # <b>스르륵은 타격보다 작아야 한다</b> [고침 2026-10-16].
+    #
+    # 타격을 떼어냈으므로 남은 것을 '타격 음량'에 맞추면 안 된다 — 그러면 꼬리가
+    # 평타만큼 커져서 무너지는 소리가 때리는 소리를 덮는다.
+    #
+    # 원본에서 <b>타격과 스르륵이 어떤 비율이었는지</b>를 그대로 가져온다.
+    # 그 비율만 지키면, 평타가 타격 자리를 대신해도 들리는 균형은 원본과 같다.
+    whole = xs[int((PICK[0] - LEAD) * sr):int(PICK[1] * sr)]
+    src_impact = heard(impact_only(whole, sr), sr)
+    src_tail = heard(whole[int(DROP_IMPACT * sr):], sr)
+    ratio = src_tail / (src_impact + 1e-12)
+
+    mine = heard(seg, sr)                 # 꼬리 전체로 잰다. 여기엔 타격이 없다
+    gain = (target * ratio) / (mine + 1e-12)
+    print(f"  원본 비율  스르륵 / 타격 = {20 * math.log10(ratio + 1e-12):+.1f}dB  (이 비율을 지킨다)")
     peak_after = max(abs(v) for v in seg) * gain
 
     # 올렸을 때 천장을 넘으면 넘지 않을 만큼만 올린다
@@ -169,7 +202,7 @@ def main():
     seg = [v * gain for v in seg]
 
     print(f"  원본  {SRC.name}  ({len(xs)/sr:.2f}초)")
-    print(f"  구간  {PICK[0]:.3f} ~ {PICK[1]:.3f}초  ->  {len(seg)/sr:.3f}초")
+    print(f"  구간  {PICK[0]+DROP_IMPACT:.3f} ~ {PICK[1]:.3f}초  ->  {len(seg)/sr:.3f}초  (타격 {DROP_IMPACT*1000:.0f}ms 떼어냄)")
     print(f"  기준  Strike {len(refs)}개 평균 체감 {target:.5f}")
     print(f"  게인  x{gain:.3f}{'  (천장에 걸려 줄임)' if capped else ''}")
     print(f"  결과  피크 {max(abs(v) for v in seg):.3f} · 타격 체감 {heard(impact_only(seg, sr), sr):.5f}")

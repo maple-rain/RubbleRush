@@ -258,6 +258,20 @@ namespace Demo.Destruction
         {
             Impact(Mathf.Lerp(strikeShakeMax, collapseShake, 0.5f),
                    collapseShakeSeconds, collapseHitStop);
+
+            // <b>때리는 소리와 무너지는 소리를 같이 울린다</b> [고침 2026-10-16].
+            //
+            // 처음에는 Finisher 하나로 바꿨는데, 기획자: "이렇게 내지를 때 무너지면서
+            // 타격 사운드가 들리지 않고, 스르르 무너지니 부자연스러움을 주는것 같아."
+            //
+            // 재 보니 그럴 만했다. 그 음원의 타격은 평타보다 <b>6dB 약하고 평평하다</b>
+            // (평타는 -1.7dB에서 뾰족하게 서는데 이것은 -7.6dB로 평평하다).
+            // 그래서 '때렸다'가 없고 '울린다'만 남았다.
+            //
+            // 이제 역할을 나눈다 — <b>때리는 것은 평타가</b>, 무너지는 것은 Finisher가.
+            // Finisher 파일에서는 타격 120ms를 떼어내 둘이 정점에서 안 부딪히게 했다
+            // (겹치면 크레스트가 죽어 먹먹해진다 — 10월에 한 번 배웠다).
+            Utils.GameAudio.Play(Data.Sfx.Strike, point);
             Utils.GameAudio.Play(Data.Sfx.Finisher, point);
         }
 

@@ -85,7 +85,28 @@ namespace Demo.Utils
             w.scale = Mathf.Max(0.05f, sizeScale);
             w.follow = robot;
             w.FindHands(robot);
+
+            // <b>한 번은 말하고 지나간다</b> [2026-10-16]. 손 뼈를 이름으로 찾는데
+            // 리그마다 이름이 달라서 못 찾을 수 있고, 그러면 바람이 가슴께에서 나와
+            // "안 나온다"로 보인다. 조용히 틀리느니 로그 한 줄이 싸다.
+            Debug.Log("[PunchWind] 붙었다 — 왼손 " + (w.leftHand != null ? w.leftHand.name : "못 찾음")
+                    + " · 오른손 " + (w.rightHand != null ? w.rightHand.name : "못 찾음")
+                    + " · 크기 x" + w.scale.ToString("0.##"), w);
             return w;
+        }
+
+        /// <summary>
+        /// 지금 상태를 한 줄로. F7로 부른다 — "안 보인다"가 <b>안 나오는 것</b>인지
+        /// <b>나오는데 안 보이는 것</b>인지 가른다.
+        /// </summary>
+        public string Report()
+        {
+            int live = 0;
+            for (int i = 0; i < strokes.Count; i++) if (strokes[i].Left > 0f) live++;
+            return "[PunchWind] 획 " + strokes.Count + "개 중 살아 있음 " + live
+                 + " · 손 " + (leftHand != null ? "O" : "X") + (rightHand != null ? "O" : "X")
+                 + " · 카메라 " + (eye != null ? eye.name : "없음")
+                 + " · 머티리얼 " + (s_mat != null ? s_mat.shader.name : "없음");
         }
 
         /// <summary>
@@ -169,7 +190,17 @@ namespace Demo.Utils
             // <b>실제 시간으로 센다.</b> 타격에는 히트스톱이 걸려 게임 시간이 멈추는데,
             // 바람까지 같이 얼면 '멈췄다'가 아니라 '끊겼다'로 보인다.
             float dt = Time.unscaledDeltaTime;
-            if (eye == null) eye = Camera.main;
+
+            // <b>카메라를 못 찾으면 획이 옆모습이 되어 사라진다</b> [고침 2026-10-16].
+            //
+            // 빌보드 회전을 eye 가 있을 때만 걸었더니, Camera.main 이 null 인 동안
+            // 쿼드가 처음 자세(월드 +Z) 그대로 서 있었다 — 쿼터뷰에서는 거의 옆모습이라
+            // 두께 0으로 보인다. MainCamera 태그가 없는 씬도 있으므로 아무 카메라나 잡는다.
+            if (eye == null)
+            {
+                eye = Camera.main;
+                if (eye == null) eye = FindFirstObjectByType<Camera>();
+            }
 
             for (int i = 0; i < strokes.Count; i++)
             {
@@ -267,8 +298,24 @@ namespace Demo.Utils
             s_mat = new Material(sh) { name = "PunchWind" };
             s_mat.SetTexture("_BaseMap", tex);
             s_mat.SetColor("_BaseColor", Color.white);
-            s_mat.SetFloat("_Surface", 1f);            // Transparent
-            s_mat.SetFloat("_Blend", 1f);              // Additive — 바람은 더해지는 빛이다
+            // <b>_Surface·_Blend 만으로는 아무 일도 안 일어난다</b> [고침 2026-10-16].
+            //
+            // 그 둘은 URP <b>머티리얼 에디터가 읽는 표식</b>일 뿐이다. 실제 블렌딩은
+            // _SrcBlend/_DstBlend/_ZWrite 가 정하는데, 코드로 만들면 에디터가 안 도므로
+            // 표식만 세워 두면 머티리얼이 <b>불투명인 채로 남는다</b> — 알파가 통째로
+            // 무시되어 흰 사각형이 뜨거나, 큐와 엇갈려 아예 안 보인다.
+            // 기획자: "주먹을 내지를 때 VFX도 추가된 것 같지가 않고."
+            //
+            // 그래서 렌더 상태를 직접 적는다. 덧셈 블렌딩이다 (SrcAlpha + One).
+            s_mat.SetFloat("_Surface", 1f);            // 표식 — 인스펙터에서 보기 위한 것
+            s_mat.SetFloat("_Blend", 1f);
+            s_mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            s_mat.SetFloat("_AlphaClip", 0f);
+
+            // <b>양면으로 그린다.</b> 빌보드가 한 프레임 늦거나 카메라를 못 찾으면
+            // 뒷면이 보이는데, 컬링이 켜져 있으면 그때 통째로 사라진다.
+            s_mat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
             s_mat.SetFloat("_ZWrite", 0f);
             s_mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             s_mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");

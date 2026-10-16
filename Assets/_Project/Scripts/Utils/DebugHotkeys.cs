@@ -71,6 +71,16 @@ namespace Demo.Utils
             // F6 — 구멍이 왜 잔해를 안 먹는지 콘솔에 적는다 [지시 2026-10-15].
             // 재현이 안 되는 증상이라, 그 순간에 눌러 이유를 남기게 한다.
             if (kb.f6Key.wasPressedThisFrame) ReportHole();
+
+            // F7 — 주먹 바람이 왜 안 보이는지 [2026-10-16].
+            // "안 나오는 것"과 "나오는데 안 보이는 것"은 고치는 곳이 다르다.
+            if (kb.f7Key.wasPressedThisFrame)
+            {
+                var w = Object.FindFirstObjectByType<PunchWind>();
+                Debug.Log(w != null ? w.Report()
+                        : "[F7] PunchWind가 씬에 없다 — PlayerAnimator.Awake에서 "
+                        + "만들다 막혔을 수 있다. 콘솔에서 '[PlayerAnimator]' 경고를 볼 것.");
+            }
         }
 
         /// <summary>가장 가까운 구조물을 즉시 부순다. 잔해를 빨리 쌓아 폐합을 시연할 때 쓴다.</summary>
