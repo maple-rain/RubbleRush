@@ -29,14 +29,16 @@ namespace Demo.Utils
         const int Pool = 10;
 
         /// <summary>한 장이 사는 시간(초). 짧아야 연타에 겹쳐 타지 않는다.</summary>
-        const float Life = 0.12f;
+        const float Life = 0.16f;
 
-        /// <summary>터질 때의 지름(m)과 끝 지름. 커지면서 옅어진다.</summary>
-        const float FromSize = 0.35f;
-        const float ToSize = 1.15f;
+        /// <summary>터질 때의 지름(m)과 끝 지름 [키움 2026-10-17].
+        /// 0.35 -> 1.00 / 1.15 -> 3.00. 재 보니 6m 거리에서 41x41 픽셀이라
+        /// 1920x1080 에서 먼지만 했다. 기획자: "있다면 더 크고 강하게".</summary>
+        const float FromSize = 1.00f;
+        const float ToSize = 3.00f;
 
         /// <summary>가장 밝을 때의 알파.</summary>
-        const float Alpha = 0.9f;
+        const float Alpha = 1.0f;
 
         struct Flash
         {
@@ -243,7 +245,12 @@ namespace Demo.Utils
             s_mat.SetFloat("_Surface", 1f);
             s_mat.SetFloat("_Blend", 1f);
             s_mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);   // 덧셈 — 섬광이다
+            // <b>덧셈이 아니라 알파 블렌딩</b> [고침 2026-10-17].
+            //
+            // 섬광이니 덧셈이 자연스럽다고 생각했는데, 덧셈은 <b>밝은 배경에서
+            // 안 보인다</b> — 파괴 화면은 대낮의 콘크리트 벽이라 흰색에서 포화된다.
+            // PunchWind 에서 똑같이 당하고 고쳐 놓고 여기서 그대로 반복했다.
+            s_mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             s_mat.SetFloat("_ZWrite", 0f);
             s_mat.SetFloat("_AlphaClip", 0f);
             s_mat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);

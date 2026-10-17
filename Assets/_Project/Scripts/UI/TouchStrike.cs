@@ -127,7 +127,16 @@ namespace Demo.UI
         /// 모드가 셋이다 — Field · Demolition · <b>Ended</b>. 뒤집어 쓰면 구역이 끝난 뒤에도
         /// 화면을 치면 주먹이 나간다. Ended는 "입력을 받지 않는다"고 못 박힌 상태다.
         /// </summary>
-        bool Active => mode != null && mode.IsDemolition && !TitleScreen.Blocking;
+        /// <b>덮는 화면이 하나라도 있으면 꺼진다</b> [고침 2026-10-17].
+        ///
+        /// 타이틀만 보고 있었다. 그래서 <b>파괴 화면에 있는 동안 시간이 끝나면</b>
+        /// 결과 화면 위에 TOUCH! 가 그대로 떠 있고 누르면 주먹까지 나갔다 —
+        /// 모드는 여전히 Demolition 이라 위 검사를 멀쩡히 통과한다.
+        /// <see cref="TouchControls"/> · <see cref="ActionPrompt"/>가 이미 보고 있던
+        /// 목록과 맞춘다. 같은 실수를 세 번째 고친다.
+        bool Active => mode != null && mode.IsDemolition
+                    && !TitleScreen.Blocking && !ResultScreen.Blocking
+                    && !UpgradeScreen.Blocking && !HowToScreen.Blocking;
 
         void Awake()
         {
