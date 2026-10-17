@@ -58,7 +58,7 @@ namespace Demo.UI
             for (int i = 0; i < held.Length && !touching; i++) touching = held[i] != None;
             if (!touching && !showWhenNoTouch) return;
 
-            if (label == null) label = MakeLabel();
+            if (label == null || label.font != UiSkin.Body) label = MakeLabel();
 
             for (int i = 0; i < pads.Length; i++)
             {
@@ -90,14 +90,11 @@ namespace Demo.UI
             DrawDisc(ToGui(stickOrigin + delta), StickRadius * 0.42f, Knob);
         }
 
+        /// <summary>글꼴은 <see cref="UiSkin"/>에서 받는다 — 직접 만들면 빌드에서
+        /// 한글이 빈칸이 된다 [고침 2026-10-17. 자세한 사정은 <see cref="TitleScreen"/>].</summary>
         static GUIStyle MakeLabel()
         {
-            var s = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-            };
+            GUIStyle s = UiSkin.Label(true, TextAnchor.MiddleCenter);
             s.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
             return s;
         }

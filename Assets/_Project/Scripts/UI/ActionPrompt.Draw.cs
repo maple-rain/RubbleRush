@@ -21,7 +21,7 @@ namespace Demo.UI
         void OnGUI()
         {
             if (Event.current.type != EventType.Repaint) return;
-            if (label == null) Styles();
+            if (label == null || label.font != UiSkin.Body) Styles();
 
             Blocked();
             if (rows.Count == 0) return;
@@ -92,14 +92,11 @@ namespace Demo.UI
             label.normal.textColor = new Color(1f, 1f, 1f, 0.95f);
         }
 
+        /// <summary>글꼴은 <see cref="UiSkin"/>에서 받는다 — 직접 만들면 빌드에서
+        /// 한글이 빈칸이 된다 [고침 2026-10-17. 자세한 사정은 <see cref="TitleScreen"/>].</summary>
         void Styles()
         {
-            label = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-            };
+            label = UiSkin.Label(true, TextAnchor.MiddleLeft);
             label.normal.textColor = new Color(1f, 1f, 1f, 0.95f);
 
             keyCap = new GUIStyle(label) { alignment = TextAnchor.MiddleCenter };

@@ -29,6 +29,11 @@ namespace Demo.Utils
     /// </summary>
     public sealed class DebrisBenchmark : MonoBehaviour
     {
+        // <b>출시 빌드에는 안 나온다</b> [지시 2026-10-01 · 적용 2026-10-17].
+        // FrameMeter 는 처음부터 이 지시를 지켰는데 이 파일은 빠져 있었다.
+        // 첫 알파 WebGL 빌드 화면 위쪽에 'F9' 가 그대로 찍혀 나왔다 [실측 2026-10-17].
+        // 런타임 if 로 막으면 코드와 문자열이 빌드에 그대로 실린다 — 조건부 컴파일로 막는다.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         [SerializeField, Tooltip("한 단계에서 늘릴 잔해 수")]
         int stepSize = 10;
 
@@ -207,5 +212,6 @@ namespace Demo.Utils
                 ? "<color=#ff8080>에디터다. 이 fps는 폰과 무관하다 — 실기 빌드에서 다시 잴 것</color>"
                 : "<color=#80ff80>실기</color>", style);
         }
+#endif
     }
 }

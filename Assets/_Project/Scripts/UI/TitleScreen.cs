@@ -163,7 +163,9 @@ namespace Demo.UI
         {
             if (page == Page.Playing) return;
             if (HowToScreen.Blocking) return;     // 조작법이 떠 있으면 그 쪽만 보인다
-            if (big == null) Styles();
+            // 글꼴이 바뀌었으면 다시 만든다 — UiSkin.Awake 가 이 OnGUI 보다
+            // 늦게 돌면 글꼴 없는 스타일이 그대로 굳는다.
+            if (big == null || mid.font != UiSkin.Body) Styles();
 
             float h = Screen.height, w = Screen.width;
             GUI.color = Color.white;
@@ -323,16 +325,23 @@ namespace Demo.UI
             GUI.color = prev;
         }
 
+        /// <summary>
+        /// <b>글꼴을 반드시 <see cref="UiSkin"/>에서 받아 온다</b> [고침 2026-10-17].
+        ///
+        /// 전에는 <c>new GUIStyle(GUI.skin.label)</c>로 만들고 글꼴을 지정하지 않았다.
+        /// 에디터에서는 멀쩡했다 — 유니티 에디터는 글립이 없으면 <b>OS 글꼴로
+        /// 대체</b>하기 때문이다. 그런데 WebGL 빌드에는 OS 글꼴이 없다. 기본 글꼴인
+        /// Liberation Sans 에 한글이 없으니 <b>시작·조작법·옵션·나가기가 전부 빈칸</b>으로
+        /// 나왔다 [실측: 첫 알파 빌드 2026-10-17].
+        ///
+        /// <see cref="HUD"/>·<see cref="HowToScreen"/>·<see cref="ResultScreen"/>는
+        /// 처음부터 <see cref="UiSkin.Label"/>을 거쳤기에 멀쩡했다. 이 화면만 빠져 있었다.
+        /// </summary>
         void Styles()
         {
-            big = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-            };
-            mid = new GUIStyle(big);
-            small = new GUIStyle(big) { fontStyle = FontStyle.Normal };
+            big = UiSkin.Heading(TextAnchor.MiddleCenter);                 // 제목 — 을지로체
+            mid = UiSkin.Label(true, TextAnchor.MiddleCenter);             // 버튼 — 도현체 굵게
+            small = UiSkin.Label(false, TextAnchor.MiddleCenter);
         }
     }
 }

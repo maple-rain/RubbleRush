@@ -225,7 +225,7 @@ namespace Demo.UI
         void OnGUI()
         {
             if (Event.current.type != EventType.Repaint || !Active) return;
-            if (hand == null) Styles();
+            if (hand == null || hand.font != UiSkin.Body) Styles();
 
             Hint();
             Flash();
@@ -341,14 +341,11 @@ namespace Demo.UI
 
         // ── 그리기 도구 ──────────────────────────────────────────────────────────
 
+        /// <summary>글꼴은 <see cref="UiSkin"/>에서 받는다 — 직접 만들면 빌드에서
+        /// 한글이 빈칸이 된다 [고침 2026-10-17. 자세한 사정은 <see cref="TitleScreen"/>].</summary>
         void Styles()
         {
-            hand = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-            };
+            hand = UiSkin.Label(true, TextAnchor.MiddleCenter);
         }
 
         /// <summary>글자 뒤에 그림자를 깐다. 벽이 밝으면 흰 글자만으로는 안 읽힌다.</summary>

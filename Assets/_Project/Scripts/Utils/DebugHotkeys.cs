@@ -15,6 +15,11 @@ namespace Demo.Utils
     /// </summary>
     public sealed class DebugHotkeys : MonoBehaviour
     {
+        // <b>출시 빌드에는 안 나온다</b> [지시 2026-10-01 · 적용 2026-10-17].
+        // FrameMeter 는 처음부터 이 지시를 지켰는데 이 파일은 빠져 있었다.
+        // 첫 알파 WebGL 빌드 화면 위쪽에 'F9' 가 그대로 찍혀 나왔다 [실측 2026-10-17].
+        // 런타임 if 로 막으면 코드와 문자열이 빌드에 그대로 실린다 — 조건부 컴파일로 막는다.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         [SerializeField, Tooltip("F2가 한 번에 넣는 경험치")]
         int xpStep = 10;
 
@@ -253,5 +258,6 @@ namespace Demo.Utils
 
             GUILayout.EndArea();
         }
+#endif
     }
 }
