@@ -359,6 +359,7 @@ namespace Demo.Destruction
         public void OnCollapseBurst(Vector3 point)
         {
             Utils.GameAudio.Play(Data.Sfx.CollapseBurst, point);
+            Utils.GameAudio.Play(Data.Sfx.VfxCanon, point);
         }
 
         /// <summary>
@@ -445,7 +446,12 @@ namespace Demo.Destruction
             // 흔들림이 이미 정점을 기다리고 있었다(StrikePeakCount). 같은 자리에
             // 붙이면 소리와 화면과 주먹이 한 박자에 떨어진다. 실측된 정점은
             // 방아쇠에서 130ms 뒤다.
-            if (burstAt > 0f) Utils.GameAudio.Play(Data.Sfx.VfxBurst, burstPoint, burstAt);
+            // <b>섞지 않고 동시에 두 소리를 울린다</b> [지시 2026-10-17].
+            if (burstAt > 0f)
+            {
+                Utils.GameAudio.Play(Data.Sfx.VfxBurst, burstPoint, burstAt);
+                Utils.GameAudio.Play(Data.Sfx.VfxCanon, burstPoint, burstAt);
+            }
             burstAt = 0f;
         }
 
