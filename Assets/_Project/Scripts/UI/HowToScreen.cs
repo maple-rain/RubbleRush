@@ -40,11 +40,38 @@ namespace Demo.UI
         /// <summary>떠 있는 동안인가. 다른 UI가 자기를 숨기는 데 쓴다.</summary>
         public static bool Blocking { get; private set; }
 
-        /// <summary>어디서든 연다. 화면이 씬에 없으면 아무 일도 안 한다.</summary>
+        /// <summary>지금 멈춰 세우기 전의 시간 배속. 닫을 때 그대로 되돌린다.</summary>
+        static float s_keepTimeScale = 1f;
+
+        /// <summary>
+        /// 어디서든 연다. 화면이 씬에 없으면 아무 일도 안 한다.
+        ///
+        /// <b>여는 동안 시간을 멈춘다</b> [고침 2026-10-19].
+        ///
+        /// 전에는 타이틀에서만 열었고 그때는 <see cref="TitleScreen"/>이 이미
+        /// <c>timeScale = 0</c>으로 세워 둬서 문제가 없었다. 그런데 튜토리얼이
+        /// 시작할 때 자동으로 띄우게 되면서 <b>게임 중에</b> 열리게 됐고,
+        /// <see cref="Core.GameLoop"/>는 <c>TimeRemaining -= Time.deltaTime</c>이라
+        /// <b>읽는 동안 제한 시간이 깎인다</b> [실측 2026-10-19].
+        /// <see cref="ResultScreen"/>이 쓰던 방식 그대로 세웠다 되돌린다.
+        /// </summary>
         public static void Open()
         {
             if (s_current == null) s_current = FindFirstObjectByType<HowToScreen>();
-            if (s_current != null) Blocking = true;
+            if (s_current == null) return;
+            if (Blocking) return;                 // 이미 떠 있으면 배속을 또 덮지 않는다
+
+            s_keepTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            Blocking = true;
+        }
+
+        /// <summary>닫는다. 세워 둔 시간을 반드시 되돌린다.</summary>
+        static void Close()
+        {
+            if (!Blocking) return;
+            Blocking = false;
+            Time.timeScale = s_keepTimeScale;
         }
 
         GUIStyle head, title, body;
@@ -54,7 +81,9 @@ namespace Demo.UI
         void OnDestroy()
         {
             if (s_current == this) s_current = null;
-            Blocking = false;
+            // 씬을 떠나기 전에 시간을 되돌린다. 안 그러면 다음 씬이 멈춘 채 시작한다
+            // (ResultScreen 이 같은 사고를 막아 둔 것과 같은 이유).
+            Close();
         }
 
         void OnGUI()
@@ -87,7 +116,7 @@ namespace Demo.UI
             // ── 닫기 ───────────────────────────────────────────────────────────
             float bw = w * 0.18f, bh = h * 0.085f;
             if (UiSkin.Button(new Rect((w - bw) * 0.5f, h * 0.81f, bw, bh), "닫기", body))
-                Blocking = false;
+                Close();
         }
 
         /// <summary>

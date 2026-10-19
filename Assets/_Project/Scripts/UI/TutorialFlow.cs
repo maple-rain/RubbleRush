@@ -36,6 +36,19 @@ namespace Demo.UI
         /// <summary>끝난 단계를 몇 초 동안 더 보여 주는가.</summary>
         const float DoneHold = 1.4f;                        // [제안·미승인]
 
+        /// <summary>
+        /// 튜토리얼을 시작할 때 <see cref="HowToScreen"/>을 한 번 띄울 것인가
+        /// [지시 2026-10-19].
+        ///
+        /// <see cref="HowToScreen"/>의 주석이 이미 예고해 둔 자리다 —
+        /// "나중에 첫 판에 한 번 자동으로 띄우고 싶으면 Open 를 그때 부르면 된다."
+        /// 한 바퀴(부순다 · 둘러싼다 · 밀어넣는다)를 먼저 보여 주고 나서
+        /// 단계별로 시키는 편이, 아무 설명 없이 "움직여라"로 시작하는 것보다 낫다.
+        ///
+        /// 여는 동안 시간은 멈춘다 — <see cref="HowToScreen.Open"/>이 세운다.
+        /// </summary>
+        const bool ShowHowToFirst = true;                   // [제안·미승인]
+
         /// <summary>단계가 바뀌고 이만큼은 조건을 안 본다. 직전 동작이 다음 단계를
         /// 곧바로 끝내 버리는 것을 막는다 — 예: 잔해를 넣자마자 '구멍을 키워라'가
         /// 이미 충족돼 글만 번쩍이고 지나간다.</summary>
@@ -139,6 +152,9 @@ namespace Demo.UI
                 s_current = go.AddComponent<TutorialFlow>();
             }
             s_current.Restart();
+
+            // 한 바퀴를 먼저 보여 준다. 시간은 저쪽이 멈춰 세운다.
+            if (ShowHowToFirst) HowToScreen.Open();
         }
 
         void Restart()
