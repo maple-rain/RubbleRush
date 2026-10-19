@@ -4,13 +4,13 @@
 # bandGap:   앞 띠와의 간격(m).
 # timeLimit(초)와 quota는 구역 전체 값이라 첫 줄만 읽는다.
 structureId,count,spreadMul,bandGap,timeLimit,quota
-t1_weak,8,2.4,6,360,60
-t2_light,7,2.4,6,,
-t3_normal,6,2.4,6,,
-t7_glass,5,2.4,6,,
-t4_heavy,5,2.4,6,,
-t6_brick,4,2.4,6,,
-t5_solid,4,2.4,6,,
+t1_weak,4,2.4,6,180,30
+t2_light,4,2.4,6,,
+t3_normal,3,2.4,6,,
+t7_glass,2,2.4,6,,
+t4_heavy,2,2.4,6,,
+t6_brick,2,2.4,6,,
+t5_solid,2,2.4,6,,
 # ── 아래는 이 구역에 한 채도 없는 종류다. count를 올리면 들어온다 ──
 plank,0,2.4,6,,
 wall,0,2.4,6,,
