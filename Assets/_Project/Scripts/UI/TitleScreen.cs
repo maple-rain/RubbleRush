@@ -171,7 +171,22 @@ namespace Demo.UI
             GUI.color = Color.white;
 
             // 바탕을 덮는다. 뒤에 게임이 멈춰 있는 것이 비쳐 보이게 완전히 가리지는 않는다.
-            Fill(new Rect(0, 0, w, h), new Color(0.06f, 0.07f, 0.09f, 0.88f));
+            //
+            // <b>배경 그림이 물려 있으면 그것을 깐다</b> [2026-10-19].
+            // 게임 중에는 하늘이 한 번도 안 보인다 — 카메라 위쪽 모서리가 수평보다
+            // 20도 아래라서다 [실측 2026-10-08, BackdropDress]. 그래서 철거 현장
+            // 원경은 여기 타이틀에서만 쓸 수 있다.
+            Texture2D back = UiSkin.Backdrop;
+            if (back != null)
+            {
+                GUI.DrawTexture(new Rect(0, 0, w, h), back, ScaleMode.ScaleAndCrop);
+                // 그림 위로 옅은 장막 — 안 깔면 글자가 원경에 묻힌다.
+                Fill(new Rect(0, 0, w, h), new Color(0.06f, 0.07f, 0.09f, 0.55f));
+            }
+            else
+            {
+                Fill(new Rect(0, 0, w, h), new Color(0.06f, 0.07f, 0.09f, 0.88f));
+            }
 
             big.fontSize = Mathf.RoundToInt(h * 0.12f);
             mid.fontSize = Mathf.RoundToInt(h * 0.055f);

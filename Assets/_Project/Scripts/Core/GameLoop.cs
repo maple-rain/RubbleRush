@@ -113,6 +113,10 @@ namespace Demo.Core
             if (builder != null) builder.Build(data);
 
             IsRunning = true;
+
+            // 튜토리얼 구역이면 가르치는 흐름이 붙는다. 아니면 스스로 아무것도
+            // 안 만든다 — 판정은 저쪽이 한다 [지시 2026-10-17].
+            UI.TutorialFlow.OnZoneStart(data);
         }
 
         /// <summary>구멍이 삼킨 만큼 더한다.</summary>

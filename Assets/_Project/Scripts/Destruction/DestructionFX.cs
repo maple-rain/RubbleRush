@@ -423,6 +423,12 @@ namespace Demo.Destruction
             Utils.HitFlash.Pop(burstPoint,
                                Mathf.Lerp(0.85f, 1.25f, rush));
 
+            // <b>그리고 의성어가 터진다</b> [지시 2026-10-17 · 구현 2026-10-19].
+            //
+            // 기획자가 죠죠의 "오라!"를 짚으며 말한 것이 이것이다 —
+            // "파워의 느낌과 속도감에서 오는 쾌감". 연타일수록 크게 뜬다.
+            UI.HitWord.Pop3D(burstPoint, rush);
+
             // <b>연타에도 멈춤을 조금은 남긴다</b> [고침 2026-10-16].
             //
             // 전에는 러쉬 중에 정지를 통째로 뺐다. 멈추면 애니메이션도 멈춰

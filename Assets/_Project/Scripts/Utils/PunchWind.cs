@@ -373,9 +373,40 @@ namespace Demo.Utils
 
                 strokes[i] = k;
             }
+
+            CountLive();
         }
 
         // ── 진단 ─────────────────────────────────────────────────────────────
+
+        /// <summary>지금 떠 있는 획 수 [신설 2026-10-17].</summary>
+        public int Live { get; private set; }
+
+        /// <summary>이 판에서 가장 많이 떴던 수. F1 오버레이가 읽는다.</summary>
+        public int Peak { get; private set; }
+
+        /// <summary>풀 크기. <see cref="Peak"/>가 여기 붙어 있으면 풀이 병목이다.</summary>
+        public int Capacity => strokes.Count;
+
+        /// <summary>
+        /// <b>왜 세는가.</b> "수많은 잔상"을 만들려면 지금 몇 장이 뜨는지부터 알아야
+        /// 하는데, <b>상수만 보고는 계산이 안 된다</b> [2026-10-17].
+        ///
+        /// 한 주먹이 <see cref="Shots"/>장을 남기지 못한다. 한계가 셋이고 겹친다 —
+        /// (1) <c>Shots x ShotGap</c> 창, (2) 다음 주먹이 <see cref="Burst"/>로
+        /// 리셋, (3) 손이 되돌아오면 즉시 중단. (3)은 애니메이션이 정하므로
+        /// 데이터로 풀리지 않는다.
+        ///
+        /// 그래서 <b>재고 나서 값을 건드린다.</b> 추측으로 고쳤다가 같은 것을
+        /// 네 번 되돌린 일이 있었다.
+        /// </summary>
+        void CountLive()
+        {
+            int alive = 0;
+            for (int i = 0; i < strokes.Count; i++) if (strokes[i].Left > 0f) alive++;
+            Live = alive;
+            if (alive > Peak) Peak = alive;
+        }
 
         /// <summary>F7이 부른다. "안 나오는 것"과 "나오는데 안 보이는 것"을 가른다.</summary>
         public string Report()

@@ -29,6 +29,7 @@ namespace Demo.Utils
         Hole hole;
         GameLoop loop;
         CargoTow cargo;
+        PunchWind wind;                 // 잔상 밀도를 재려고 [2026-10-17]
         DebrisSpawner spawner;
         Demo.Player.InputRouter input;
         Demo.Player.Breaker breaker;
@@ -55,6 +56,8 @@ namespace Demo.Utils
             // 구멍은 구역 생성 뒤에 만들어지므로 여기서 늦게 잡는다.
             if (hole == null) hole = FindFirstObjectByType<Hole>();
             if (loop == null) loop = GameLoop.Instance;
+            // 잔상은 PlayerAnimator.Awake 가 로봇에 붙이므로 역시 늦게 잡힌다.
+            if (wind == null) wind = FindFirstObjectByType<PunchWind>();
 
             if (kb.f1Key.wasPressedThisFrame) showOverlay = !showOverlay;
 
@@ -220,6 +223,18 @@ namespace Demo.Utils
                     over = $"  <color=#ff8a5c>← 막힘: 가장 큰 것 {cargo.LargestRadius:0.00}m > 구멍. " +
                            "Q로 내려놓기</color>";
                 GUILayout.Label($"견인  <b>{cargo.TotalUnits}</b>단위{over}", style);
+            }
+
+            // <b>잔상 밀도.</b> 최대가 풀 크기에 붙어 있으면 풀이 병목이고,
+            // 한참 아래면 병목은 찍는 쪽(ShotGap · 되돌아오기 중단)이다.
+            // 상수만 보고는 못 가리므로 실제로 센다 [2026-10-17].
+            if (wind != null)
+            {
+                bool capped = wind.Peak >= wind.Capacity;
+                GUILayout.Label($"잔상  지금 <b>{wind.Live}</b>장   최대 <b>{wind.Peak}</b>장" +
+                                $"   풀 {wind.Capacity}" +
+                                (capped ? "  <color=#ff8a5c>← 풀이 꽉 찼다</color>"
+                                        : "  <color=#9aa4ad>(풀은 여유)</color>"), style);
             }
 
             if (input != null)

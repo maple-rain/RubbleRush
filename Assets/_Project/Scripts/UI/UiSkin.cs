@@ -33,14 +33,29 @@ namespace Demo.UI
         [SerializeField, Tooltip("제목용. 타이틀 로고와 결과 화면 제목에만 (배민 을지로체)")]
         Font titleFont;
 
+        [SerializeField, Tooltip("타격마다 터지는 의성어 그림 (쾅·퍽·쿵·콰광). " +
+                 "VARCO 로 만든 것이고, 비면 HitWord 가 글꼴로 대신 그린다")]
+        Texture2D[] hitWords;
+
+        [SerializeField, Tooltip("타이틀 화면 배경. 비면 지금처럼 단색으로 덮는다")]
+        Texture2D titleBackdrop;
+
         static Font s_body, s_title;
         static Texture2D s_px;
+        static Texture2D[] s_words;
+        static Texture2D s_backdrop;
 
         /// <summary>본문 글꼴. 없으면 null이고, 그러면 유니티 기본 글꼴로 그려진다.</summary>
         public static Font Body => s_body;
 
         /// <summary>제목 글꼴. 큰 글자에만 쓴다 — 획이 불균일해 작은 글씨에서 읽기 나쁘다.</summary>
         public static Font Title => s_title;
+
+        /// <summary>타격 의성어 그림. 비어 있을 수 있다 — 쓰는 쪽이 길이를 확인할 것.</summary>
+        public static Texture2D[] Words => s_words;
+
+        /// <summary>타이틀 배경 그림. 없으면 null이고, 그러면 단색으로 덮는다.</summary>
+        public static Texture2D Backdrop => s_backdrop;
 
         // ── 색 ────────────────────────────────────────────────────────────────
         // 전부 기존 코드에서 그대로 옮겨 온 값이다. 새로 고른 것은 하나도 없다.
@@ -73,6 +88,8 @@ namespace Demo.UI
         {
             s_body = bodyFont;
             s_title = titleFont;
+            s_words = hitWords;
+            s_backdrop = titleBackdrop;
 
             if (bodyFont == null)
                 Debug.LogWarning("[UiSkin] 본문 글꼴이 안 물려 있다 — 유니티 기본 글꼴로 그린다. " +
@@ -83,6 +100,8 @@ namespace Demo.UI
         {
             if (s_body == bodyFont) s_body = null;
             if (s_title == titleFont) s_title = null;
+            if (s_words == hitWords) s_words = null;
+            if (s_backdrop == titleBackdrop) s_backdrop = null;
         }
 
         // ── 그리기 ────────────────────────────────────────────────────────────
